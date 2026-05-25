@@ -6,17 +6,12 @@ It **only listens** — it never sends anything to the robots.
 ## Folder structure
 
 ```
-robocup-gui/
+Robo-Erectus-RoboCup-Debug-Dashboard/
 ├── server.js        ← Node.js backend: UDP listeners + WebSocket server
 ├── package.json
 └── public/
     └── index.html   ← Frontend: runs in your browser (served by server.js)
 ```
-
-> **Why not a separate `frontend/` folder?**
-> Separate frontend/backend folders are used when the frontend has its own
-> build step (e.g. React or Vue with Vite). This dashboard is plain HTML + JS,
-> so Express just serves `public/` as static files — no build step needed.
 
 ## Requirements
 

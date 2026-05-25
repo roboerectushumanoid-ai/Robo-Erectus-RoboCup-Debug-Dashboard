@@ -593,9 +593,9 @@ function drawField(robots) {
 // ── Robot cards ───────────────────────────────────────────────────────────────
 const ROLE_NAMES    = ['Unknown', 'Striker', 'Goalkeeper', 'Defender']; // matches CompactRole enum: 0=unknown,1=striker,2=goalkeeper,3=defender
 const PENALTY_NAMES = {
-  0:'None', 1:'Illegal Pos.', 2:'Motion In Set', 3:'Game Stuck',
-  4:'Incapable', 5:'Pick Up', 6:'Ball Holding', 7:'Left Field',
-  8:'Arms/Hands', 9:'Pushing', 10:'Sent Off', 11:'Substitute',
+  0:'None', 1:'Ball Manipulation', 2:'Physical Contact', 3:'Illegal Attack',
+  4:'Illegal Defense', 5:'Pickup/Incapable', 6:'Service',
+  11:'Substitute', 14:'Substitute', 15:'Manual',
 };
 
 function fmtN(v, dec) {
@@ -766,30 +766,45 @@ socket.on('state', ({ gameState, robots, teamId }) => {
     }
   }
 
-  // Merge server robot data into lastRobots instead of replacing it wholesale.
-  // This preserves ROS bridge fields (pose from ROS, decision, rosBallAbs) across
-  // server ticks, and uses the UDP pose when available but falls back to ROS pose.
+  // Merge server robot data into lastRobots, preserving any ROS bridge fields.
+  // IMPORTANT: never delete robots from lastRobots here — if team-comm UDP is
+  // absent the server sends robots={} and the delete would wipe every ROS robot.
+  // Cleanup happens only when the ROS connection itself closes.
   Object.entries(robots).forEach(([k, srv]) => {
     const prev = lastRobots[k] || {};
+    const rosSeen = prev.lastSeen && (Date.now() - prev.lastSeen < 5000);
     lastRobots[k] = {
       ...prev,
       ...srv,
-      pose:         srv.pose ?? prev.pose,         // keep ROS pose if UDP has none
-      decision:     prev.decision,                 // ROS-only; server never sends this
+      pose:         srv.pose ?? prev.pose,       // keep ROS pose when UDP has none
+      decision:     prev.decision,               // ROS-only fields — server never sends these
       decisionTime: prev.decisionTime,
       rosBallAbs:   prev.rosBallAbs,
       kickEvent:    prev.kickEvent,
+      // Don't let server mark robot stale if ROS bridge saw it recently
+      stale:        srv.stale && !rosSeen ? true : (srv.stale === false ? false : prev.stale),
     };
   });
-  // Drop robots that the server no longer knows about
-  Object.keys(lastRobots).forEach(k => { if (!robots[k]) delete lastRobots[k]; });
 
-  drawField(lastRobots);
-  renderRobots(lastRobots);
-  renderLegend(lastRobots);
+  scheduleRender();
 });
 
 drawField({});
+
+// ── Render throttle ───────────────────────────────────────────────────────────
+// All data sources (socket, ROS topics) funnel through here so the DOM is
+// rebuilt at most once per animation frame instead of on every incoming packet.
+let _renderPending = false;
+function scheduleRender() {
+  if (_renderPending) return;
+  _renderPending = true;
+  requestAnimationFrame(() => {
+    _renderPending = false;
+    drawField(lastRobots);
+    renderRobots(lastRobots);
+    renderLegend(lastRobots);
+  });
+}
 
 // ── ROS Bridge integration ────────────────────────────────────────────────────
 // Subscribes to ROS2 topics via rosbridge WebSocket.
@@ -875,6 +890,13 @@ function rosConnect(btn) {
       stat.textContent = ''; btn.textContent = 'Connect'; btn.className = 'ros-btn';
     }
     delete rosConns[pNum];
+    // Remove robot from lastRobots only when it has no UDP data either
+    // (if it has zone/role from team-comm it stays visible as stale)
+    const k = String(pNum);
+    if (lastRobots[k] && !lastRobots[k].zone && !lastRobots[k].ballZone) {
+      delete lastRobots[k];
+      scheduleRender();
+    }
   });
 }
 
@@ -888,43 +910,41 @@ function rosSubscribe(ros, playerNum) {
     subs.push(t);
   }
 
-  // 1. Behavior decision — "striker-chase", "defender-adjust", "goalkeeper-kick" etc.
+  // 1. Behavior decision
   topic('/booster_soccer/player_decision', 'std_msgs/String', msg => {
     if (!lastRobots[key]) lastRobots[key] = { playerNum };
     lastRobots[key].decision     = msg.data;
     lastRobots[key].decisionTime = Date.now();
-    renderRobots(lastRobots);
+    scheduleRender();
   });
 
-  // 2. Localisation pose (PoseStamped, meters)
+  // 2. Localisation pose (PoseStamped, meters → convert to mm)
   topic('/booster_soccer/localization/robot_pose', 'geometry_msgs/PoseStamped', msg => {
     if (!lastRobots[key]) lastRobots[key] = { playerNum };
-    const { x, y, z } = msg.pose.position;
+    const { x, y } = msg.pose.position;
     const o = msg.pose.orientation;
-    // Quaternion → yaw
     const yaw = Math.atan2(2*(o.w*o.z + o.x*o.y), 1 - 2*(o.y*o.y + o.z*o.z));
-    // Convert m → mm to match UDP data
     lastRobots[key].pose     = { x: x * 1000, y: y * 1000, theta: yaw };
     lastRobots[key].lastSeen = Date.now();
     lastRobots[key].stale    = false;
-    renderRobots(lastRobots);
-    drawField(lastRobots);
+    scheduleRender();
   });
 
-  // 3. Ball position (Point, meters absolute)
+  // 3. Ball position (Point, meters → mm)
   topic('/booster_soccer/ball_position', 'geometry_msgs/Point', msg => {
     if (!lastRobots[key]) lastRobots[key] = { playerNum };
     lastRobots[key].rosBallAbs = { x: msg.x * 1000, y: msg.y * 1000 };
     lastRobots[key].lastSeen   = Date.now();
+    scheduleRender();
   });
 
-  // 4. Kick event — flash the robot card
+  // 4. Kick event — flash the robot card briefly
   topic('/kick_ball', 'brain/Kick', () => {
     if (!lastRobots[key]) lastRobots[key] = { playerNum };
     lastRobots[key].kickEvent = true;
-    renderRobots(lastRobots);
+    scheduleRender();
     setTimeout(() => {
-      if (lastRobots[key]) { lastRobots[key].kickEvent = false; }
+      if (lastRobots[key]) { lastRobots[key].kickEvent = false; scheduleRender(); }
     }, 700);
   });
 

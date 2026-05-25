@@ -353,13 +353,17 @@
 <!-- ROS Bridge settings drawer -->
 <div id="ros-panel">
   <h2>ROS Bridge — Robot Behavior</h2>
-  <p>
-    Reads live behavior state (<code>chase</code>, <code>kick</code>, <code>adjust</code>…)
-    and localisation directly from ROS2 topics.<br>
-    <strong style="color:#e6edf3">No robot code changes needed.</strong>
-    On each robot run:<br>
+  <p>Connection refused (✗) means rosbridge is not running on the robot.<br>
+  SSH into each robot and run:</p>
+  <p style="margin:4px 0">
+    <code>ssh booster@192.168.0.167</code><br>
     <code>ros2 launch rosbridge_server rosbridge_websocket_launch.xml</code>
   </p>
+  <p style="margin-top:6px">
+    <code>ssh booster@192.168.0.169</code><br>
+    <code>ros2 launch rosbridge_server rosbridge_websocket_launch.xml</code>
+  </p>
+  <p style="margin-top:6px;color:#8b949e;font-size:10px">Then click Connect below. Topics used: <code>/booster_soccer/player_decision</code> · <code>/booster_soccer/localization/robot_pose</code> · <code>/booster_soccer/ball_position</code></p>
   <div id="ros-rows"></div>
   <button class="ros-btn" style="align-self:flex-start" onclick="addRosRow()">+ Add robot</button>
 </div>
@@ -409,7 +413,7 @@
   </div>
 </div>
 
-<footer>Passive listener — GC :3838 | Status forward :3738 | Team comm :10000+teamId</footer>
+<footer>Passive listener — GC :3838 | Status forward :3738 | Team comm :10000+teamId | Field 14×9 m</footer>
 
 <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
 <script src="/socket.io/socket.io.js"></script>
@@ -418,17 +422,19 @@
 const canvas     = document.getElementById('field');
 const canvasWrap = document.getElementById('canvas-wrap');
 const ctx        = canvas.getContext('2d');
-const FIELD_W_MM = 9000, FIELD_H_MM = 6000;
+const FIELD_W_MM = 14000, FIELD_H_MM = 9000;  // HL TeenSize/AdultSize field (14 m × 9 m)
 let CW = 540, CH = 360;
 let lastRobots = {};
+let gcGoalkeeper = null; // player number the GC has designated as goalkeeper (our team)
 
-// Resize canvas to fill canvasWrap while maintaining 3:2 (9:6) ratio
+// Resize canvas maintaining FIELD_W_MM:FIELD_H_MM aspect ratio
 new ResizeObserver(() => {
   const { width, height } = canvasWrap.getBoundingClientRect();
   if (!width || !height) return;
-  const scale = Math.min(width / 9, height / 6);
-  CW = Math.floor(scale * 9);
-  CH = Math.floor(scale * 6);
+  const fw = FIELD_W_MM / 1000, fh = FIELD_H_MM / 1000;
+  const scale = Math.min(width / fw, height / fh);
+  CW = Math.floor(scale * fw);
+  CH = Math.floor(scale * fh);
   canvas.width  = CW;
   canvas.height = CH;
   drawField(lastRobots);
@@ -439,6 +445,18 @@ function fieldToCanvas(x, y) {
            CH / 2 - y * (CH / FIELD_H_MM) ];
 }
 function r(mm) { return mm * (CW / FIELD_W_MM); }
+
+// Convert 3×3 team-comm zone (1-9) to field-centre coordinates in mm
+function zoneCenterMm(zone) {
+  if (!zone || zone < 1 || zone > 9) return null;
+  const idx = zone - 1;
+  const col = Math.floor(idx / 3);
+  const rowFromTop = idx % 3;
+  return {
+    x: -FIELD_W_MM / 2 + FIELD_W_MM * (col + 0.5) / 3,
+    y:  FIELD_H_MM / 2 - FIELD_H_MM * (rowFromTop + 0.5) / 3,
+  };
+}
 
 const ROBOT_COLORS = ['#58a6ff', '#3fb950', '#f0883e', '#a371f7', '#ffa657'];
 
@@ -457,17 +475,23 @@ function drawField(robots) {
     }
   }
 
+  // HL TeenSize/AdultSize markings (all in mm)
+  const FW2 = FIELD_W_MM / 2, FH2 = FIELD_H_MM / 2;
+  const GW = 2600, GD = 500;         // goal width / depth
+  const PAW = 5600, PAD = 3000;      // penalty-area width / depth
+  const PSPOT = 4000;                // penalty spot distance from centre (|x|)
+
   // Lines
   ctx.strokeStyle = 'rgba(255,255,255,0.8)';
   ctx.lineWidth   = Math.max(1, r(18));
 
   // Boundary
-  const [bx, by] = fieldToCanvas(-4500, 3000);
-  ctx.strokeRect(bx, by, r(9000), r(6000));
+  const [bx, by] = fieldToCanvas(-FW2, FH2);
+  ctx.strokeRect(bx, by, r(FIELD_W_MM), r(FIELD_H_MM));
 
   // Halfway line
-  const [hla, hly1] = fieldToCanvas(0,  3000);
-  const [,    hly2] = fieldToCanvas(0, -3000);
+  const [hla, hly1] = fieldToCanvas(0,  FH2);
+  const [,    hly2] = fieldToCanvas(0, -FH2);
   ctx.beginPath(); ctx.moveTo(hla, hly1); ctx.lineTo(hla, hly2); ctx.stroke();
 
   // Center circle (r = 1500 mm)
@@ -478,29 +502,27 @@ function drawField(robots) {
   ctx.fillStyle = 'rgba(255,255,255,0.8)';
   ctx.beginPath(); ctx.arc(ccx, ccy, r(55), 0, Math.PI * 2); ctx.fill();
 
-  // Goals (2600 mm wide, 400 mm deep shown inside boundary)
-  const GW = 2600, GD = 400;
+  // Goals (inside the field boundary)
   ctx.fillStyle = 'rgba(255,255,255,0.05)';
-  const [lgx, lgy] = fieldToCanvas(-4500, GW / 2);
+  const [lgx, lgy] = fieldToCanvas(-FW2, GW / 2);
   ctx.fillRect(lgx, lgy, r(GD), r(GW)); ctx.strokeRect(lgx, lgy, r(GD), r(GW));
-  const [rgx, rgy] = fieldToCanvas(4500 - GD, GW / 2);
+  const [rgx, rgy] = fieldToCanvas(FW2 - GD, GW / 2);
   ctx.fillRect(rgx, rgy, r(GD), r(GW)); ctx.strokeRect(rgx, rgy, r(GD), r(GW));
 
-  // Penalty areas (3900 mm wide, 2000 mm deep)
-  const PAW = 3900, PAD = 2000;
-  const [lpx, lpy] = fieldToCanvas(-4500, PAW / 2);
+  // Penalty areas
+  const [lpx, lpy] = fieldToCanvas(-FW2, PAW / 2);
   ctx.strokeRect(lpx, lpy, r(PAD), r(PAW));
-  const [rpx, rpy] = fieldToCanvas(4500 - PAD, PAW / 2);
+  const [rpx, rpy] = fieldToCanvas(FW2 - PAD, PAW / 2);
   ctx.strokeRect(rpx, rpy, r(PAD), r(PAW));
 
   // Penalty spots
-  [[-3000, 0], [3000, 0]].forEach(([px, py]) => {
+  [[-PSPOT, 0], [PSPOT, 0]].forEach(([px, py]) => {
     const [sx, sy] = fieldToCanvas(px, py);
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.beginPath(); ctx.arc(sx, sy, r(55), 0, Math.PI * 2); ctx.fill();
   });
 
-  // Ball (estimated absolute position from each robot that has seen it recently)
+  // Ball — precise from ReturnData (port 3738) / ROS bridge, or approximate from team-comm zone
   const seenBalls = [];
   Object.values(robots).forEach(robot => {
     if (!robot.pose || robot.ballAge < 0 || robot.ballAge > 3 || !robot.ball) return;
@@ -516,10 +538,25 @@ function drawField(robots) {
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
   });
 
-  // Robots
+  // Fallback: draw approximate ball from team-comm ball zone if no precise data
+  if (!seenBalls.length) {
+    let bestZone = 0;
+    Object.values(robots).forEach(r => { if (r.ballZone > 0) bestZone = r.ballZone; });
+    const zc = zoneCenterMm(bestZone);
+    if (zc) {
+      const [cx, cy] = fieldToCanvas(zc.x, zc.y);
+      const br = Math.max(8, r(400));
+      ctx.beginPath(); ctx.arc(cx, cy, br, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(240,136,62,0.35)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+  }
+
+  // Robots — precise pose from ReturnData/ROS, or approximate zone centre
   Object.values(robots).forEach(robot => {
-    if (!robot.pose) return;
-    const { x, y, theta } = robot.pose;
+    const zc = !robot.pose && robot.zone > 0 ? zoneCenterMm(robot.zone) : null;
+    if (!robot.pose && !zc) return;
+    const { x, y, theta } = robot.pose ?? { x: zc.x, y: zc.y, theta: 0 };
     const [rx, ry] = fieldToCanvas(x, y);
     const color = ROBOT_COLORS[(robot.playerNum - 1) % ROBOT_COLORS.length];
     const rr    = Math.max(8, r(330));
@@ -554,7 +591,7 @@ function drawField(robots) {
 }
 
 // ── Robot cards ───────────────────────────────────────────────────────────────
-const ROLE_NAMES    = ['Striker', 'Goalkeeper', 'Defender'];
+const ROLE_NAMES    = ['Unknown', 'Striker', 'Goalkeeper', 'Defender']; // matches CompactRole enum: 0=unknown,1=striker,2=goalkeeper,3=defender
 const PENALTY_NAMES = {
   0:'None', 1:'Illegal Pos.', 2:'Motion In Set', 3:'Game Stuck',
   4:'Incapable', 5:'Pick Up', 6:'Ball Holding', 7:'Left Field',
@@ -588,7 +625,9 @@ function renderRobots(robots) {
   panel.innerHTML = list.map(r => {
     const color = ROBOT_COLORS[(r.playerNum - 1) % ROBOT_COLORS.length];
     const conf  = r.confidence ?? 0;
-    const role  = r.role !== undefined ? (ROLE_NAMES[r.role] ?? `Role ${r.role}`) : '–';
+    // GC-designated goalkeeper overrides self-reported role from team comms
+    let role = r.role !== undefined ? (ROLE_NAMES[r.role] ?? `Role ${r.role}`) : '–';
+    if (gcGoalkeeper !== null && r.playerNum === gcGoalkeeper) role = 'Goalkeeper';
 
     const badges = [];
     if (r.stale)         badges.push(`<span class="badge badge-stale">Stale</span>`);
@@ -599,9 +638,14 @@ function renderRobots(robots) {
     const poseStr = r.pose
       ? `(${fmtN(r.pose.x/1000,2)}, ${fmtN(r.pose.y/1000,2)}) m  ${fmtN(r.pose.theta*180/Math.PI,1)}°`
       : '–';
-    const ballStr = r.ballAge >= 0 && r.ball
-      ? `${fmtN(r.ballAge,1)} s  rel(${fmtN(r.ball.x/1000,2)}, ${fmtN(r.ball.y/1000,2)}) m`
-      : 'Not seen';
+    let ballStr;
+    if (r.ballAge >= 0 && r.ball) {
+      ballStr = `${fmtN(r.ballAge,1)} s  rel(${fmtN(r.ball.x/1000,2)}, ${fmtN(r.ball.y/1000,2)}) m`;
+    } else if (r.ballZone > 0) {
+      ballStr = `Zone ${r.ballZone} (approx)`;
+    } else {
+      ballStr = 'Not seen';
+    }
 
     // Decision state from ROS Bridge
     const decAge = r.decisionTime ? (Date.now() - r.decisionTime) / 1000 : 999;
@@ -659,7 +703,8 @@ function renderLegend(robots) {
     .sort((a, b) => a.playerNum - b.playerNum)
     .map(r => {
       const color = ROBOT_COLORS[(r.playerNum - 1) % ROBOT_COLORS.length];
-      const role  = r.role !== undefined ? ROLE_NAMES[r.role] ?? '' : '';
+      let role = r.role !== undefined ? ROLE_NAMES[r.role] ?? '' : '';
+      if (gcGoalkeeper !== null && r.playerNum === gcGoalkeeper) role = 'Goalkeeper';
       return `<span class="legend-item">
         <span class="legend-dot" style="background:${color}"></span>
         R${r.playerNum}${role ? ' · ' + role : ''}
@@ -715,12 +760,33 @@ socket.on('state', ({ gameState, robots, teamId }) => {
       document.getElementById('score0').textContent     = gameState.teams[0].score;
       document.getElementById('score1').textContent     = gameState.teams[1].score;
       renderPenalties(gameState.teams);
+      // Track GC-designated goalkeeper for our team
+      const ourTeam = gameState.teams.find(t => t.teamNumber === teamId);
+      gcGoalkeeper = ourTeam?.goalkeeper ?? null;
     }
   }
 
-  drawField(robots);
-  renderRobots(robots);
-  renderLegend(robots);
+  // Merge server robot data into lastRobots instead of replacing it wholesale.
+  // This preserves ROS bridge fields (pose from ROS, decision, rosBallAbs) across
+  // server ticks, and uses the UDP pose when available but falls back to ROS pose.
+  Object.entries(robots).forEach(([k, srv]) => {
+    const prev = lastRobots[k] || {};
+    lastRobots[k] = {
+      ...prev,
+      ...srv,
+      pose:         srv.pose ?? prev.pose,         // keep ROS pose if UDP has none
+      decision:     prev.decision,                 // ROS-only; server never sends this
+      decisionTime: prev.decisionTime,
+      rosBallAbs:   prev.rosBallAbs,
+      kickEvent:    prev.kickEvent,
+    };
+  });
+  // Drop robots that the server no longer knows about
+  Object.keys(lastRobots).forEach(k => { if (!robots[k]) delete lastRobots[k]; });
+
+  drawField(lastRobots);
+  renderRobots(lastRobots);
+  renderLegend(lastRobots);
 });
 
 drawField({});
@@ -802,6 +868,7 @@ function rosConnect(btn) {
   ros.on('error', () => {
     stat.textContent = '✗'; stat.style.color = '#f85149';
     btn.textContent  = 'Retry'; btn.className = 'ros-btn err';
+    console.warn(`[ROS] Connection to ws://${ip}:9090 failed. Run on robot: ros2 launch rosbridge_server rosbridge_websocket_launch.xml`);
   });
   ros.on('close', () => {
     if (btn.textContent !== 'Retry') {

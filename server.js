@@ -68,6 +68,7 @@ function parseGameControlData(buf) {
     const base = TEAMS_BASE + i * TEAM_INFO_SIZE;
     if (buf.length < base + 5) return null;
     const teamNumber    = buf.readUInt8(base);
+    const goalkeeper    = buf.readUInt8(base + 3); // GC-designated goalkeeper player number
     const score         = buf.readUInt8(base + 4);
     const messageBudget = buf.length >= base + 10 ? buf.readUInt16LE(base + 8) : 0;
     const players = [];
@@ -80,7 +81,7 @@ function parseGameControlData(buf) {
         secsTillUnpenalised: buf.readUInt8(pBase + 1),
       });
     }
-    return { teamNumber, score, messageBudget, players };
+    return { teamNumber, goalkeeper, score, messageBudget, players };
   }).filter(Boolean);
 
   return {
@@ -121,33 +122,35 @@ function parseReturnData(buf) {
   };
 }
 
-// CompactTeamPacket (14 bytes, from robot_communication_node.cpp)
-// byte[1] bit layout (constants from robot_communication_node.cpp):
+// CompactTeamPacket (5 bytes, from robot_communication_node.cpp)
+// byte[0]  password (0xA7)
+// byte[1]  identity:
 //   bits 3-0  player_id  (COMPACT_PLAYER_ID_MASK = 0x0F)
-//   bits 5-4  role       (COMPACT_ROLE_MASK = 0x30, COMPACT_ROLE_SHIFT = 4)
+//   bits 5-4  role       (0=unknown, 1=striker, 2=goalkeeper, 3=defender)
 //   bit  6    is_alive   (COMPACT_READY_MASK = 0x40)
-//   bit  7    is_lead    (COMPACT_ACTIVE_BALL_ACTION_MASK = 0x80)
-// Confidence nibbles are 0-15 → multiply by (100/15) for percent.
+//   bit  7    unused (always 0)
+// byte[2]  (ball_zone << 4) | player1_zone   — 0=unknown, 1-9 valid
+// byte[3]  (player2_zone << 4) | player3_zone
+// byte[4]  format marker (0xA2)
 function parseTeamComm(buf) {
-  if (buf.length < 14) return null;
+  if (buf.length !== 5) return null;
+  if (buf[0] !== 0xA7) return null;           // password mismatch
+  if (buf[4] !== 0xA2) return null;           // format marker mismatch
+
   const identity = buf[1];
   const senderId = identity & 0x0F;
-  const role     = (identity & 0x30) >> 4;
+  const role     = (identity & 0x30) >> 4;   // 0=unknown,1=striker,2=goalkeeper,3=defender
   const isAlive  = (identity & 0x40) !== 0;
-  const isLead   = (identity & 0x80) !== 0;
   if (senderId < 1 || senderId > 5) return null;
 
-  const hiNibble = b => (b >> 4) & 0x0F;
-  const loNibble = b => b & 0x0F;
-  const confPct  = n => Math.round(n * 100 / 15);
-
-  const players = [
-    { playerNum: 1, zone: hiNibble(buf[2]), ballZone: loNibble(buf[3]), confidence: confPct(hiNibble(buf[5])), chaseScore: buf[7],  goalieScore: buf[10] },
-    { playerNum: 2, zone: loNibble(buf[2]), ballZone: hiNibble(buf[4]), confidence: confPct(loNibble(buf[5])), chaseScore: buf[8],  goalieScore: buf[11] },
-    { playerNum: 3, zone: hiNibble(buf[3]), ballZone: loNibble(buf[4]), confidence: confPct(hiNibble(buf[6])), chaseScore: buf[9],  goalieScore: buf[12] },
+  const ballZone = (buf[2] >> 4) & 0x0F;     // sender's observed ball zone (0=unknown, 1-9)
+  const players  = [
+    { playerNum: 1, zone: buf[2] & 0x0F },
+    { playerNum: 2, zone: (buf[3] >> 4) & 0x0F },
+    { playerNum: 3, zone: buf[3] & 0x0F },
   ];
 
-  return { senderId, role, isAlive, isLead, players, finalBallZone: loNibble(buf[6]) };
+  return { senderId, role, isAlive, players, ballZone };
 }
 
 // ── Express + Socket.io ───────────────────────────────────────────────────────
@@ -181,11 +184,26 @@ makeUdp(PORT_GC_DATA, 'GC-Data', msg => {
 });
 
 // ── Listener 2: Forwarded robot status (GC re-broadcasts on port 3738) ───────
-// Each message is a 4-byte IPv4 sender address followed by 32-byte ReturnData.
-makeUdp(PORT_STATUS_FWD, 'Status-Fwd', msg => {
-  if (msg.length < 36) return;
-  const senderIp = `${msg[0]}.${msg[1]}.${msg[2]}.${msg[3]}`;
-  const parsed   = parseReturnData(msg.slice(4));
+// Some GC versions prepend a 4-byte IPv4 sender address; others send the raw
+// 32-byte ReturnData directly.  Try both so either format works.
+makeUdp(PORT_STATUS_FWD, 'Status-Fwd', (msg, rinfo) => {
+  let senderIp, parsed;
+
+  // Try with 4-byte IP prefix first (36-byte total)
+  if (msg.length >= 36) {
+    const slice = msg.slice(4);
+    if (slice.toString('ascii', 0, 4) === 'RGrt') {
+      senderIp = `${msg[0]}.${msg[1]}.${msg[2]}.${msg[3]}`;
+      parsed   = parseReturnData(slice);
+    }
+  }
+
+  // Fall back: raw 32-byte packet without IP prefix — use UDP source address
+  if (!parsed && msg.length >= 32) {
+    senderIp = rinfo.address;
+    parsed   = parseReturnData(msg);
+  }
+
   if (!parsed) return;
   const key = String(parsed.playerNum);
   appState.robots[key] = { ...appState.robots[key], ...parsed, senderIp, lastSeen: Date.now() };
@@ -196,22 +214,29 @@ makeUdp(PORT_STATUS_FWD, 'Status-Fwd', msg => {
 makeUdp(PORT_TEAM_COMM, 'Team-Comm', msg => {
   const parsed = parseTeamComm(msg);
   if (!parsed) return;
+
+  // Update zone for each player embedded in the packet (players 1-3)
   parsed.players.forEach(p => {
     const key = String(p.playerNum);
     appState.robots[key] = {
       ...appState.robots[key],
       playerNum: p.playerNum,
-      zone: p.zone, ballZone: p.ballZone,
-      confidence: p.confidence,
-      chaseScore: p.chaseScore, goalieScore: p.goalieScore,
-      lastSeen: Date.now(),
+      zone: p.zone,
     };
-    if (p.playerNum === parsed.senderId) {
-      appState.robots[key].role    = parsed.role;
-      appState.robots[key].isAlive = parsed.isAlive;
-      appState.robots[key].isLead  = parsed.isLead;
-    }
   });
+
+  // Sender-specific fields (role, alive, ball zone)
+  const sKey = String(parsed.senderId);
+  appState.robots[sKey] = {
+    ...appState.robots[sKey],
+    playerNum: parsed.senderId,
+    role:      parsed.role,
+    isAlive:   parsed.isAlive,
+    isLead:    false,              // not encoded in 5-byte packet
+    ballZone:  parsed.ballZone,
+    lastSeen:  Date.now(),
+  };
+
   broadcast();
 });
 

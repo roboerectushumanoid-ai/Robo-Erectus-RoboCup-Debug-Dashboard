@@ -34,14 +34,6 @@ If your team ID is not 55:
 node server.js <team_id>
 ```
 
-To test without real robots (demo mode):
-
-```bash
-node server.js --demo
-```
-
-Demo mode injects 3 moving robots, a live countdown timer, scores, and a penalty so every panel is populated. Flags can be combined: `node server.js 55 --demo`
-
 ## What it displays
 
 | Panel | Data |

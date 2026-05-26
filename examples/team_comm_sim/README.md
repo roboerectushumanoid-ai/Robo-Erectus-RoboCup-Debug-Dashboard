@@ -51,13 +51,13 @@ machine and broadcast is blocked by your network/firewall.
 This mirrors the player 2 defender-to-goalie ACK scenario:
 
 ```bash
-python3 send_role_switch_ack.py --team-id 55
+python3 send_role_switch_ack.py --team-id 55 --players 1,2,3
 ```
 
 Dry run:
 
 ```bash
-python3 send_role_switch_ack.py --team-id 55 --dry-run
+python3 send_role_switch_ack.py --team-id 55 --players 1,2,3 --dry-run
 ```
 
 ## Packet Helpers

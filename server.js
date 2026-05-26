@@ -284,6 +284,7 @@ makeUdp(PORT_TEAM_COMM, 'Team-Comm', (msg, rinfo) => {
     isLead:        parsed.isLead,
     finalBallZone: parsed.finalBallZone,
     roleSwitch:    parsed.roleSwitch,
+    roleSwitchTime: parsed.roleSwitch.opcode === 0 ? null : now,
     senderIp:      rinfo.address,
     lastSeen:      now,
   };

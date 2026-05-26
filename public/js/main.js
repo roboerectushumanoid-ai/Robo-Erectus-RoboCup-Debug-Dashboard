@@ -13,6 +13,20 @@ const { drawField } = setupFieldCanvas(state);
 const scoreCharts = setupScoreCharts(state);
 
 let renderPending = false;
+let roleSwitchExpiryTimer = null;
+
+function scheduleRoleSwitchExpiry() {
+  if (roleSwitchExpiryTimer) return;
+  const hasRecentRoleSwitch = Object.values(state.robots).some(robot =>
+    robot.roleSwitch?.opcode && robot.roleSwitchTime && Date.now() - robot.roleSwitchTime < 8500
+  );
+  if (!hasRecentRoleSwitch) return;
+
+  roleSwitchExpiryTimer = setTimeout(() => {
+    roleSwitchExpiryTimer = null;
+    scheduleRender();
+  }, 8200);
+}
 
 function scheduleRender() {
   if (renderPending) return;
@@ -24,6 +38,7 @@ function scheduleRender() {
     renderRobots(state.robots, state.gcGoalkeeper);
     renderLegend(state.robots, state.gcGoalkeeper);
     scoreCharts.record(state.robots);
+    scheduleRoleSwitchExpiry();
   });
 }
 

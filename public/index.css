@@ -286,9 +286,49 @@
       grid-row: 1 / -1;
       display: grid;
       grid-template-columns: minmax(0, 1fr) 96px;
+      grid-template-rows: auto minmax(0, 1fr);
       gap: 14px;
       min-height: 0;
       min-width: 0;
+    }
+    .role-switch-banner {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #e6edf3;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .role-switch-banner[hidden] { display: none; }
+    .role-switch-banner.request {
+      border-color: #e3b341;
+      background: rgba(227, 179, 65, 0.12);
+      color: #e3b341;
+    }
+    .role-switch-banner.ack {
+      border-color: #3fb950;
+      background: rgba(63, 185, 80, 0.12);
+      color: #56d364;
+    }
+    .role-switch-main {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .role-switch-seq {
+      flex-shrink: 0;
+      color: #8b949e;
+      font-family: Consolas, monospace;
+      font-size: 10px;
+      font-weight: 700;
     }
     .card-stats {
       display: grid;
@@ -297,6 +337,8 @@
       font-size: 11.5px;
       align-content: start;
       min-width: 0;
+      grid-column: 1;
+      grid-row: 2;
     }
     .sl { color: #8b949e; }
     .sv {
@@ -346,6 +388,8 @@
       gap: 5px;
       justify-content: center;
       min-width: 0;
+      grid-column: 2;
+      grid-row: 2;
     }
     .meter-label { font-size: 10px; color: #8b949e; text-align: right; }
     .meter-track { height: 6px; background: #21262d; border-radius: 3px; overflow: hidden; }
@@ -488,6 +532,9 @@
       flex-direction: column;
       gap: 8px;
       overflow: hidden;
+    }
+    .score-graph-card .role-switch-banner {
+      flex-shrink: 0;
     }
     .score-graph-top {
       display: flex;

@@ -1,4 +1,5 @@
 import { PENALTY_NAMES, ROBOT_COLORS, ROLE_NAMES } from './constants.js';
+import { roleSwitchView } from './roleSwitch.js';
 import { confColor, fmtN } from './utils.js';
 
 function decisionClass(decision) {
@@ -78,6 +79,13 @@ export function renderRobots(robots, gcGoalkeeper) {
     const decisionHtml = decision
       ? `<span class="sl">Decision</span><span class="sv"><span class="decision-badge ${decisionClass(decision)}">${decision}</span></span>`
       : '';
+    const roleSwitch = roleSwitchView(robot);
+    const roleSwitchHtml = roleSwitch
+      ? `<div class="role-switch-banner ${roleSwitch.cls}">
+          <span class="role-switch-main">${roleSwitch.text}</span>
+          <span class="role-switch-seq">${roleSwitch.seq}</span>
+        </div>`
+      : '';
 
     const flashClass = robot.kickEvent ? ' kick-flash' : '';
     const leadIcon = robot.isLead
@@ -100,6 +108,7 @@ export function renderRobots(robots, gcGoalkeeper) {
   </div>
   <div class="badges">${badges.join('')}</div>
   <div class="card-body">
+    ${roleSwitchHtml}
     <div class="card-stats">
       ${decisionHtml}
       <span class="sl">Pose</span>         <span class="sv">${poseStr}</span>

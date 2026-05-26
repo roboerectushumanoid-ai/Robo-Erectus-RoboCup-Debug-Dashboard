@@ -1,3 +1,5 @@
+import { roleSwitchView } from './roleSwitch.js';
+
 const STORAGE_KEY = 'scoreHistoryV1';
 const MAX_HISTORY_MS = 5 * 60 * 1000;
 const RANGES = {
@@ -221,6 +223,8 @@ function buildScoreCard(playerNum) {
   goalieBox.append(el('span', '', 'Goalie'), el('strong', '', '-'));
   values.append(chaseBox, goalieBox);
   top.append(ident, values);
+  const roleSwitchBanner = el('div', 'role-switch-banner');
+  roleSwitchBanner.hidden = true;
 
   const charts = el('div', 'score-chart-pair');
   const chasePane = el('div', 'score-chart-pane');
@@ -236,12 +240,13 @@ function buildScoreCard(playerNum) {
   goaliePane.append(goalieTitle, goalieCanvas);
   charts.append(chasePane, goaliePane);
 
-  card.append(top, charts);
+  card.append(top, roleSwitchBanner, charts);
 
   return {
     root: card,
     dot,
     status,
+    roleSwitchBanner,
     chaseValue: chaseBox.querySelector('strong'),
     goalieValue: goalieBox.querySelector('strong'),
     chaseCanvas,
@@ -311,6 +316,18 @@ export function setupScoreCharts(state) {
       const tone = robotTone(robot);
       card.dot.className = `score-robot-dot ${tone.cls}`;
       card.status.textContent = tone.label;
+      const roleSwitch = roleSwitchView(robot);
+      if (roleSwitch) {
+        card.roleSwitchBanner.className = `role-switch-banner ${roleSwitch.cls}`;
+        card.roleSwitchBanner.replaceChildren(
+          el('span', 'role-switch-main', roleSwitch.text),
+          el('span', 'role-switch-seq', roleSwitch.seq),
+        );
+        card.roleSwitchBanner.hidden = false;
+      } else {
+        card.roleSwitchBanner.hidden = true;
+      }
+
       card.chaseValue.textContent = fmtScore(scoreValue(robot.chaseScore));
       card.goalieValue.textContent = fmtScore(scoreValue(robot.goalieScore));
       drawMetricChart(card.chaseCanvas, history, robot.playerNum, 'chaseScore', 'Chase Score', tone, RANGES[activeRange]);

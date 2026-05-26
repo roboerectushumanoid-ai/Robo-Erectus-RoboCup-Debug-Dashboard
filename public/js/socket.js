@@ -1,6 +1,8 @@
 import { renderPenalties } from './robots.js';
 import { fmtTime } from './utils.js';
 
+const ROLE_SWITCH_MIN_HOLD_MS = 5000;
+
 function setStatus(text, cls) {
   const el = document.getElementById('conn-status');
   el.textContent = text;
@@ -43,14 +45,28 @@ export function setupSocket({ state, scheduleRender }) {
     Object.entries(robots ?? {}).forEach(([key, serverRobot]) => {
       const prev = state.robots[key] || {};
       const rosSeen = prev.lastSeen && (Date.now() - prev.lastSeen < 5000);
+      const incomingRoleSwitch = serverRobot.roleSwitch;
+      const hasIncomingRoleSwitch = Boolean(incomingRoleSwitch?.opcode);
+      const shouldHoldPreviousRoleSwitch = !hasIncomingRoleSwitch
+        && incomingRoleSwitch
+        && prev.roleSwitch?.opcode
+        && prev.roleSwitchTime
+        && Date.now() - prev.roleSwitchTime < ROLE_SWITCH_MIN_HOLD_MS;
+      const roleSwitch = shouldHoldPreviousRoleSwitch ? prev.roleSwitch : incomingRoleSwitch;
+      const roleSwitchTime = hasIncomingRoleSwitch
+        ? (serverRobot.roleSwitchTime ?? Date.now())
+        : (shouldHoldPreviousRoleSwitch ? prev.roleSwitchTime : (incomingRoleSwitch ? null : prev.roleSwitchTime));
+
       state.robots[key] = {
         ...prev,
         ...serverRobot,
+        roleSwitch,
         pose: serverRobot.pose ?? prev.pose,
         decision: prev.decision,
         decisionTime: prev.decisionTime,
         rosBallAbs: prev.rosBallAbs,
         kickEvent: prev.kickEvent,
+        roleSwitchTime,
         stale: serverRobot.stale && !rosSeen ? true : (serverRobot.stale === false ? false : prev.stale),
       };
     });

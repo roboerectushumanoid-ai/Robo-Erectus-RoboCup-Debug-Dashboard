@@ -36,7 +36,8 @@ export function renderRobots(robots, gcGoalkeeper) {
 </div>`;
     }
 
-    const color = ROBOT_COLORS[(robot.playerNum - 1) % ROBOT_COLORS.length];
+    const statusColor = robot.stale ? '#8b949e' : robot.isLead ? '#2ea043' : '#f0f6fc';
+    const avatarTextColor = robot.stale || robot.isLead ? '#ffffff' : '#0d1117';
     const conf = robot.confidence ?? 0;
     let role = robot.role !== undefined ? (ROLE_NAMES[robot.role] ?? `Role ${robot.role}`) : '–';
     if (gcGoalkeeper !== null && robot.playerNum === gcGoalkeeper) role = 'Goalkeeper';
@@ -77,11 +78,11 @@ export function renderRobots(robots, gcGoalkeeper) {
       : '';
 
     return `
-<div class="robot-card${robot.stale ? ' stale' : ''}${flashClass}" style="border-left-color:${color}">
+<div class="robot-card${robot.stale ? ' stale' : ''}${robot.isLead ? ' lead' : ''}${flashClass}" style="border-left-color:${statusColor}">
   <div class="card-top">
-    <div class="card-avatar" style="background:${robot.fallen ? '#444' : color}">${robot.playerNum}</div>
+    <div class="card-avatar" style="background:${statusColor};color:${avatarTextColor}">${robot.playerNum}</div>
     <div>
-      <div class="card-title" style="color:${color}">Robot ${robot.playerNum}${leadIcon}</div>
+      <div class="card-title" style="color:${statusColor}">Robot ${robot.playerNum}${leadIcon}</div>
       <div class="card-role">${role}</div>
     </div>
   </div>

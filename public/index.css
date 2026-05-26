@@ -199,7 +199,10 @@
       overflow: hidden;
       transition: border-color 0.3s, opacity 0.3s;
     }
-    .robot-card.stale { opacity: 0.4; }
+    .robot-card.stale {
+      opacity: 0.55;
+      box-shadow: inset 0 0 0 1px rgba(139, 148, 158, 0.24);
+    }
     .robot-card-empty {
       border-left-color: #30363d;
       opacity: 0.45;
@@ -263,8 +266,8 @@
       white-space: nowrap;
     }
     .badge-fallen { background: #6e1a1a; color: #f85149; }
-    .badge-lead   { background: #4d3800; color: #e3b341; }
-    .badge-active { background: #122112; color: #3fb950; }
+    .badge-lead   { background: #12331f; color: #56d364; }
+    .badge-active { background: #30363d; color: #f0f6fc; }
     .badge-stale  { background: #21262d; color: #8b949e; }
 
     .card-body {

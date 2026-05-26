@@ -8,6 +8,9 @@ export function setupFieldCanvas(state) {
 
   let canvasWidth = 540;
   let canvasHeight = 360;
+  let displayWidth = 360;
+  let displayHeight = 540;
+  let pixelRatio = 1;
 
   function fieldToCanvas(x, y) {
     return [
@@ -20,9 +23,32 @@ export function setupFieldCanvas(state) {
     return mm * (canvasWidth / FIELD_W_MM);
   }
 
+  function drawZones() {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 5]);
+
+    for (let i = 1; i < 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * canvasWidth / 3, 0);
+      ctx.lineTo(i * canvasWidth / 3, canvasHeight);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(0, i * canvasHeight / 3);
+      ctx.lineTo(canvasWidth, i * canvasHeight / 3);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
   function drawField(robots) {
     if (!canvasWidth || !canvasHeight) return;
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    ctx.clearRect(0, 0, displayWidth, displayHeight);
+    ctx.setTransform(0, -pixelRatio, pixelRatio, 0, 0, pixelRatio * canvasWidth);
 
     ctx.fillStyle = '#0d3d0d';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
@@ -39,13 +65,15 @@ export function setupFieldCanvas(state) {
     const goalDepth = 500;
     const penaltyAreaW = 5600;
     const penaltyAreaDepth = 3000;
-    const penaltySpot = 4000;
+    const penaltyMarkDistance = 2000;
 
     ctx.strokeStyle = 'rgba(255,255,255,0.8)';
     ctx.lineWidth = Math.max(1, scaleMm(18));
 
     const [bx, by] = fieldToCanvas(-halfFieldW, halfFieldH);
     ctx.strokeRect(bx, by, scaleMm(FIELD_W_MM), scaleMm(FIELD_H_MM));
+
+    drawZones();
 
     const [hla, hly1] = fieldToCanvas(0, halfFieldH);
     const [, hly2] = fieldToCanvas(0, -halfFieldH);
@@ -79,7 +107,10 @@ export function setupFieldCanvas(state) {
     const [rpx, rpy] = fieldToCanvas(halfFieldW - penaltyAreaDepth, penaltyAreaW / 2);
     ctx.strokeRect(rpx, rpy, scaleMm(penaltyAreaDepth), scaleMm(penaltyAreaW));
 
-    [[-penaltySpot, 0], [penaltySpot, 0]].forEach(([px, py]) => {
+    [
+      [-halfFieldW + penaltyMarkDistance, 0],
+      [halfFieldW - penaltyMarkDistance, 0],
+    ].forEach(([px, py]) => {
       const [sx, sy] = fieldToCanvas(px, py);
       ctx.fillStyle = 'rgba(255,255,255,0.55)';
       ctx.beginPath();
@@ -174,11 +205,16 @@ export function setupFieldCanvas(state) {
     if (!width || !height) return;
     const fw = FIELD_W_MM / 1000;
     const fh = FIELD_H_MM / 1000;
-    const scale = Math.min(width / fw, height / fh);
+    const scale = Math.min(width / fh, height / fw);
     canvasWidth = Math.floor(scale * fw);
     canvasHeight = Math.floor(scale * fh);
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
+    displayWidth = canvasHeight;
+    displayHeight = canvasWidth;
+    pixelRatio = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(displayWidth * pixelRatio);
+    canvas.height = Math.floor(displayHeight * pixelRatio);
+    canvas.style.width = `${displayWidth}px`;
+    canvas.style.height = `${displayHeight}px`;
     drawField(state.robots);
   }).observe(canvasWrap);
 

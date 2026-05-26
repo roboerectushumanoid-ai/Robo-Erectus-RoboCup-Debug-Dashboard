@@ -11,6 +11,8 @@
   <h1>Robo-Erectus RoboCup Debug Dashboard</h1>
   <div class="header-controls">
     <span id="conn-status">Connecting…</span>
+    <button id="scores-toggle">Scores</button>
+    <button id="scores-clear">Clear Scores</button>
     <button id="ros-toggle">⚙ ROS Bridge</button>
   </div>
 </header>
@@ -50,29 +52,48 @@
   <!-- ── Right: data ─────────────────────────────── -->
   <div id="right-panel">
 
-    <div id="scorebar">
-      <span class="team-name" id="team0-name">Team A</span>
-      <span class="score-num" id="score0">–</span>
-      <span class="score-dash">–</span>
-      <span class="score-num" id="score1">–</span>
-      <span class="team-name" id="team1-name">Team B</span>
-    </div>
-
-    <div id="infobar">
-      <div class="info-cell">
-        <span id="state-dot"></span>
-        <span class="iv" id="ib-state-val">–</span>
+    <div id="right-dashboard-view">
+      <div id="scorebar">
+        <span class="team-name" id="team0-name">Team A</span>
+        <span class="score-num" id="score0">–</span>
+        <span class="score-dash">–</span>
+        <span class="score-num" id="score1">–</span>
+        <span class="team-name" id="team1-name">Team B</span>
       </div>
-      <div class="info-cell"><span>Phase</span><span class="iv" id="ib-phase">–</span></div>
-      <div class="info-cell"><span class="iv" id="ib-half">–</span></div>
-      <div class="info-cell"><span>⏱</span><span class="iv" id="ib-time">–:––</span></div>
-      <div class="info-cell"><span>Set Play</span><span class="iv" id="ib-setplay">–</span></div>
-      <div class="info-cell"><span>Kicking</span><span class="iv" id="ib-kicking">–</span></div>
-      <div class="info-cell"><span>Team</span><span class="iv" id="ib-teamid">–</span></div>
+
+      <div id="infobar">
+        <div class="info-cell">
+          <span id="state-dot"></span>
+          <span class="iv" id="ib-state-val">–</span>
+        </div>
+        <div class="info-cell"><span>Phase</span><span class="iv" id="ib-phase">–</span></div>
+        <div class="info-cell"><span class="iv" id="ib-half">–</span></div>
+        <div class="info-cell"><span>⏱</span><span class="iv" id="ib-time">–:––</span></div>
+        <div class="info-cell"><span>Set Play</span><span class="iv" id="ib-setplay">–</span></div>
+        <div class="info-cell"><span>Kicking</span><span class="iv" id="ib-kicking">–</span></div>
+        <div class="info-cell"><span>Team</span><span class="iv" id="ib-teamid">–</span></div>
+      </div>
+
+      <div id="robots-panel">
+        <div class="robots-empty">Waiting for robot data…</div>
+      </div>
     </div>
 
-    <div id="robots-panel">
-      <div class="robots-empty">Waiting for robot data…</div>
+    <div id="right-score-view" hidden>
+      <div class="score-view-top">
+        <div>
+          <h2>Robot Scores</h2>
+          <p>Persisted chase and goalie score history</p>
+        </div>
+        <div class="score-range-toggle" aria-label="Score history range">
+          <button class="score-range-btn active" data-range="60s">60s</button>
+          <button class="score-range-btn" data-range="5m">5m</button>
+        </div>
+      </div>
+      <div class="score-line-key">
+        <span><i class="line-key-solid"></i> Per-robot chase and goalie graphs</span>
+      </div>
+      <div id="score-robot-graphs"></div>
     </div>
 
   </div>

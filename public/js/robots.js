@@ -13,6 +13,18 @@ function decisionClass(decision) {
   return 'dc-other';
 }
 
+function ballConfidenceIcon(conf) {
+  const confident = conf > 50;
+  const label = confident ? 'Ball confidence above 50%' : 'Ball confidence below 50%';
+  const path = confident
+    ? '<path d="M4.5 8.2 7 10.7 11.8 5.5"></path>'
+    : '<path d="M5.2 5.2 10.8 10.8M10.8 5.2 5.2 10.8"></path>';
+
+  return `<span class="ball-confidence-icon ${confident ? 'ok' : 'bad'}" title="${label}" aria-label="${label}">
+    <svg viewBox="0 0 16 16" aria-hidden="true">${path}</svg>
+  </span>`;
+}
+
 export function renderRobots(robots, gcGoalkeeper) {
   const panel = document.getElementById('robots-panel');
   const list = [1, 2, 3].map(playerNum => robots[String(playerNum)] ?? { playerNum, empty: true });
@@ -92,8 +104,9 @@ export function renderRobots(robots, gcGoalkeeper) {
       ${decisionHtml}
       <span class="sl">Pose</span>         <span class="sv">${poseStr}</span>
       <span class="sl">Ball</span>         <span class="sv">${ballStr}</span>
-      <span class="sl">Zone / Ball</span>  <span class="sv">${fmtN(robot.zone)} / ${fmtN(robot.ballZone)}</span>
-      <span class="sl">Chase / Goalie</span><span class="sv">${fmtN(robot.chaseScore)} / ${fmtN(robot.goalieScore)}</span>
+      <span class="sl">Ball Zone</span>    <span class="sv ball-zone-val">${fmtN(robot.ballZone)} ${ballConfidenceIcon(conf)}</span>
+      <span class="sl score-label">Chase Score</span><span class="sv tactical-score">${fmtN(robot.chaseScore)}</span>
+      <span class="sl score-label">Goalie Score</span><span class="sv tactical-score">${fmtN(robot.goalieScore)}</span>
     </div>
     <div class="card-meter">
       <div class="meter-label">Confidence</div>

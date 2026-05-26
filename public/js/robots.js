@@ -15,14 +15,27 @@ function decisionClass(decision) {
 
 export function renderRobots(robots, gcGoalkeeper) {
   const panel = document.getElementById('robots-panel');
-  const list = Object.values(robots).sort((a, b) => a.playerNum - b.playerNum);
+  const list = [1, 2, 3].map(playerNum => robots[String(playerNum)] ?? { playerNum, empty: true });
 
-  if (!list.length) {
+  if (!Object.keys(robots).length) {
     panel.innerHTML = '<div class="robots-empty">No robots detected</div>';
     return;
   }
 
   panel.innerHTML = list.map(robot => {
+    if (robot.empty) {
+      return `
+<div class="robot-card robot-card-empty">
+  <div class="card-top">
+    <div class="card-avatar card-avatar-empty">${robot.playerNum}</div>
+    <div>
+      <div class="card-title">Robot ${robot.playerNum}</div>
+      <div class="card-role">Waiting</div>
+    </div>
+  </div>
+</div>`;
+    }
+
     const color = ROBOT_COLORS[(robot.playerNum - 1) % ROBOT_COLORS.length];
     const conf = robot.confidence ?? 0;
     let role = robot.role !== undefined ? (ROLE_NAMES[robot.role] ?? `Role ${robot.role}`) : '–';
@@ -54,13 +67,21 @@ export function renderRobots(robots, gcGoalkeeper) {
       : '';
 
     const flashClass = robot.kickEvent ? ' kick-flash' : '';
+    const leadIcon = robot.isLead
+      ? `<span class="lead-ball" title="Lead robot" aria-label="Lead robot">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.7"></circle>
+            <path d="M4.8 8.2 7 10.3 11.4 5.8"></path>
+          </svg>
+        </span>`
+      : '';
 
     return `
 <div class="robot-card${robot.stale ? ' stale' : ''}${flashClass}" style="border-left-color:${color}">
   <div class="card-top">
     <div class="card-avatar" style="background:${robot.fallen ? '#444' : color}">${robot.playerNum}</div>
     <div>
-      <div class="card-title" style="color:${color}">Robot ${robot.playerNum}</div>
+      <div class="card-title" style="color:${color}">Robot ${robot.playerNum}${leadIcon}</div>
       <div class="card-role">${role}</div>
     </div>
   </div>

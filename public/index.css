@@ -178,8 +178,8 @@
       min-height: 0;
       overflow-y: auto;
       padding: 10px;
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-rows: repeat(3, minmax(0, 1fr));
       gap: 8px;
     }
     #robots-panel::-webkit-scrollbar { width: 4px; }
@@ -191,20 +191,28 @@
       border-left: 3px solid #30363d;
       padding: 10px 12px;
       display: grid;
-      grid-template-columns: 1fr auto;
-      grid-template-rows: auto auto;
-      column-gap: 12px;
-      min-height: 110px;   /* prevents height jumping between updates */
+      grid-template-columns: 150px minmax(0, 1fr) 96px;
+      grid-template-rows: 1fr auto;
+      column-gap: 14px;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
       transition: border-color 0.3s, opacity 0.3s;
     }
     .robot-card.stale { opacity: 0.4; }
+    .robot-card-empty {
+      border-left-color: #30363d;
+      opacity: 0.45;
+      align-content: start;
+    }
 
     .card-top {
       grid-column: 1;
+      grid-row: 1 / -1;
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 8px;
+      min-width: 0;
     }
     .card-avatar {
       width: 28px; height: 28px; border-radius: 50%;
@@ -213,13 +221,39 @@
       flex-shrink: 0;
     }
     .card-title { font-size: 13px; font-weight: 600; }
+    .lead-ball {
+      display: inline-flex;
+      width: 16px;
+      height: 16px;
+      margin-left: 7px;
+      align-items: center;
+      justify-content: center;
+      vertical-align: -3px;
+    }
+    .lead-ball svg {
+      display: block;
+      width: 16px;
+      height: 16px;
+    }
+    .lead-ball circle {
+      fill: #2ea043;
+      stroke: #56d364;
+      stroke-width: 1.2;
+    }
+    .lead-ball path {
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
     .card-role  { font-size: 11px; color: #8b949e; }
+    .card-avatar-empty { background: #30363d; color: #8b949e; }
 
     .badges {
-      grid-column: 2; grid-row: 1;
+      grid-column: 3; grid-row: 1;
       display: flex; gap: 4px; align-items: flex-start;
       padding-top: 2px;
-      min-width: 60px;   /* prevents right column from collapsing */
       justify-content: flex-end;
     }
     .badge {
@@ -234,28 +268,35 @@
     .badge-stale  { background: #21262d; color: #8b949e; }
 
     .card-body {
-      grid-column: 1 / -1;
-      display: flex;
-      gap: 16px;
+      grid-column: 2 / 4;
+      grid-row: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 96px;
+      gap: 14px;
+      min-height: 0;
+      min-width: 0;
     }
     .card-stats {
-      flex: 1;
       display: grid;
-      grid-template-columns: 90px 1fr;
+      grid-template-columns: 88px minmax(0, 1fr);
       row-gap: 2px; column-gap: 8px;
       font-size: 11.5px;
       align-content: start;
+      min-width: 0;
     }
     .sl { color: #8b949e; }
-    .sv { color: #e6edf3; font-family: 'Consolas', monospace; font-variant-numeric: tabular-nums; }
+    .sv {
+      color: #e6edf3; font-family: 'Consolas', monospace; font-variant-numeric: tabular-nums;
+      min-width: 0; overflow-wrap: anywhere;
+    }
 
     /* Confidence meter */
     .card-meter {
       display: flex;
       flex-direction: column;
       gap: 5px;
-      min-width: 86px;
       justify-content: center;
+      min-width: 0;
     }
     .meter-label { font-size: 10px; color: #8b949e; text-align: right; }
     .meter-track { height: 6px; background: #21262d; border-radius: 3px; overflow: hidden; }

@@ -38,36 +38,6 @@ function rosSubscribe(ros, playerNum, state, scheduleRender) {
     scheduleRender();
   });
 
-  topic('/booster_soccer/localization/robot_pose', 'geometry_msgs/PoseStamped', msg => {
-    if (!state.robots[key]) state.robots[key] = { playerNum };
-    const { x, y } = msg.pose.position;
-    const o = msg.pose.orientation;
-    const yaw = Math.atan2(2 * (o.w * o.z + o.x * o.y), 1 - 2 * (o.y * o.y + o.z * o.z));
-    state.robots[key].pose = { x: x * 1000, y: y * 1000, theta: yaw };
-    state.robots[key].lastSeen = Date.now();
-    state.robots[key].stale = false;
-    scheduleRender();
-  });
-
-  topic('/booster_soccer/ball_position', 'geometry_msgs/Point', msg => {
-    if (!state.robots[key]) state.robots[key] = { playerNum };
-    state.robots[key].rosBallAbs = { x: msg.x * 1000, y: msg.y * 1000 };
-    state.robots[key].lastSeen = Date.now();
-    scheduleRender();
-  });
-
-  topic('/kick_ball', 'brain/Kick', () => {
-    if (!state.robots[key]) state.robots[key] = { playerNum };
-    state.robots[key].kickEvent = true;
-    scheduleRender();
-    setTimeout(() => {
-      if (state.robots[key]) {
-        state.robots[key].kickEvent = false;
-        scheduleRender();
-      }
-    }, 700);
-  });
-
   return subs;
 }
 

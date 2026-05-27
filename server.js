@@ -6,8 +6,8 @@ const { Server } = require('socket.io');
 const dgram   = require('dgram');
 const path    = require('path');
 
-// ── Config ────────────────────────────────────────────────────────────────────
-// Accept team ID as any numeric argument so --demo order doesn't matter
+// Config
+// Accept team ID as any numeric argument.
 const teamIdArg = process.argv.slice(2).find(a => /^\d+$/.test(a));
 const TEAM_ID   = teamIdArg ? parseInt(teamIdArg, 10) : 55;
 const PORT_GC_DATA    = 3838;          // GameController → robots (broadcast game state)
@@ -19,13 +19,13 @@ const STATE_NAMES     = ['Initial', 'Ready', 'Set', 'Playing', 'Finished'];
 const PHASE_NAMES     = ['Normal', 'PenaltyShootOut', 'ExtraTime', 'Timeout'];
 const SET_PLAY_NAMES  = ['None', 'DirectFreeKick', 'IndirectFreeKick', 'PenaltyKick', 'ThrowIn', 'GoalKick', 'CornerKick'];
 
-// ── Shared state ──────────────────────────────────────────────────────────────
+// Shared state
 const appState = {
   gameState: null,
   robots: {},    // keyed by playerNum string
 };
 
-// ── Parsers ───────────────────────────────────────────────────────────────────
+// Parsers
 
 // RoboCupGameControlData (version 19, from RoboCupGameControlData.h)
 // Struct layout (bytes):
@@ -122,38 +122,81 @@ function parseReturnData(buf) {
   };
 }
 
-// CompactTeamPacket (5 bytes, from robot_communication_node.cpp)
+// CompactTeamPacket (14 bytes, from robot_communication_node.cpp)
 // byte[0]  password (0xA7)
-// byte[1]  identity:
-//   bits 3-0  player_id  (COMPACT_PLAYER_ID_MASK = 0x0F)
-//   bits 5-4  role       (0=unknown, 1=striker, 2=goalkeeper, 3=defender)
-//   bit  6    is_alive   (COMPACT_READY_MASK = 0x40)
-//   bit  7    unused (always 0)
-// byte[2]  (ball_zone << 4) | player1_zone   — 0=unknown, 1-9 valid
-// byte[3]  (player2_zone << 4) | player3_zone
-// byte[4]  format marker (0xA2)
+// byte[1]  identity: lead(7), alive(6), role(5-4), sender player id(3-0)
+// byte[2]  player1 zone(7-4), player2 zone(3-0)
+// byte[3]  player3 zone(7-4), player1 ball zone(3-0)
+// byte[4]  player2 ball zone(7-4), player3 ball zone(3-0)
+// byte[5]  player1 confidence(7-4), player2 confidence(3-0)
+// byte[6]  player3 confidence(7-4), final ball zone(3-0)
+// byte[7-9]   player1-3 chase scores
+// byte[10-12] player1-3 goalie scores
+// byte[13] role-switch control: opcode(7-6), seq(5-4), target(3-2), role(1-0)
 function parseTeamComm(buf) {
-  if (buf.length !== 5) return null;
-  if (buf[0] !== 0xA7) return null;           // password mismatch
-  if (buf[4] !== 0xA2) return null;           // format marker mismatch
+  if (buf.length !== 14) return null;
+  if (buf[0] !== 0xA7) return null;
 
   const identity = buf[1];
   const senderId = identity & 0x0F;
   const role     = (identity & 0x30) >> 4;   // 0=unknown,1=striker,2=goalkeeper,3=defender
   const isAlive  = (identity & 0x40) !== 0;
-  if (senderId < 1 || senderId > 5) return null;
+  const isLead   = (identity & 0x80) !== 0;
+  if (senderId < 1 || senderId > 3) return null;
+  if (role < 0 || role > 3) return null;
 
-  const ballZone = (buf[2] >> 4) & 0x0F;     // sender's observed ball zone (0=unknown, 1-9)
-  const players  = [
-    { playerNum: 1, zone: buf[2] & 0x0F },
-    { playerNum: 2, zone: (buf[3] >> 4) & 0x0F },
-    { playerNum: 3, zone: buf[3] & 0x0F },
+  const zones = [
+    (buf[2] >> 4) & 0x0F,
+    buf[2] & 0x0F,
+    (buf[3] >> 4) & 0x0F,
   ];
+  const ballZones = [
+    buf[3] & 0x0F,
+    (buf[4] >> 4) & 0x0F,
+    buf[4] & 0x0F,
+  ];
+  const confidences = [
+    (buf[5] >> 4) & 0x0F,
+    buf[5] & 0x0F,
+    (buf[6] >> 4) & 0x0F,
+  ];
+  const finalBallZone = buf[6] & 0x0F;
 
-  return { senderId, role, isAlive, players, ballZone };
+  if (![...zones, ...ballZones, finalBallZone].every(zone => zone >= 0 && zone <= 9)) return null;
+
+  const roleSwitch = {
+    opcode: (buf[13] & 0xC0) >> 6,
+    seq:    (buf[13] & 0x30) >> 4,
+    target: (buf[13] & 0x0C) >> 2,
+    role:   buf[13] & 0x03,
+  };
+
+  const roleSwitchValid = roleSwitch.opcode === 0
+    ? roleSwitch.seq === 0 && roleSwitch.target === 0 && roleSwitch.role === 0
+    : roleSwitch.target >= 1 && roleSwitch.target <= 3 && roleSwitch.role === 2;
+  if (!roleSwitchValid) return null;
+
+  const players = [1, 2, 3].map((playerNum, i) => ({
+    playerNum,
+    zone:        zones[i],
+    ballZone:    ballZones[i],
+    confidence:  confidences[i] * 100 / 15,
+    chaseScore:  buf[7 + i] * 100 / 255,
+    goalieScore: buf[10 + i] * 100 / 255,
+  }));
+
+  return {
+    senderId,
+    role,
+    isAlive,
+    isLead,
+    finalBallZone,
+    roleSwitch,
+    players,
+  };
 }
 
-// ── Express + Socket.io ───────────────────────────────────────────────────────
+// Express + Socket.io
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server);
@@ -168,7 +211,7 @@ function broadcast() {
   io.emit('state', { ...appState, teamId: TEAM_ID });
 }
 
-// ── UDP helpers ───────────────────────────────────────────────────────────────
+// UDP helpers
 function makeUdp(port, label, onMsg) {
   const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
   sock.on('error', err => console.error(`[${label}] ${err.message}`));
@@ -177,13 +220,13 @@ function makeUdp(port, label, onMsg) {
   return sock;
 }
 
-// ── Listener 1: GameController game state (broadcast from GC on port 3838) ───
+// Listener 1: GameController game state (broadcast from GC on port 3838)
 makeUdp(PORT_GC_DATA, 'GC-Data', msg => {
   const parsed = parseGameControlData(msg);
   if (parsed) { appState.gameState = parsed; broadcast(); }
 });
 
-// ── Listener 2: Forwarded robot status (GC re-broadcasts on port 3738) ───────
+// Listener 2: Forwarded robot status (GC re-broadcasts on port 3738)
 // Some GC versions prepend a 4-byte IPv4 sender address; others send the raw
 // 32-byte ReturnData directly.  Try both so either format works.
 makeUdp(PORT_STATUS_FWD, 'Status-Fwd', (msg, rinfo) => {
@@ -210,37 +253,46 @@ makeUdp(PORT_STATUS_FWD, 'Status-Fwd', (msg, rinfo) => {
   broadcast();
 });
 
-// ── Listener 3: Robot-to-robot team comms (broadcast on port 10000+teamId) ───
-makeUdp(PORT_TEAM_COMM, 'Team-Comm', msg => {
+// Listener 3: Robot-to-robot team comms (broadcast on port 10000+teamId)
+makeUdp(PORT_TEAM_COMM, 'Team-Comm', (msg, rinfo) => {
   const parsed = parseTeamComm(msg);
   if (!parsed) return;
+  const now = Date.now();
 
-  // Update zone for each player embedded in the packet (players 1-3)
+  // Update cached player fields embedded in the packet (players 1-3).
   parsed.players.forEach(p => {
     const key = String(p.playerNum);
     appState.robots[key] = {
       ...appState.robots[key],
       playerNum: p.playerNum,
-      zone: p.zone,
+      zone:        p.zone,
+      ballZone:    p.ballZone,
+      confidence:  p.confidence,
+      chaseScore:  p.chaseScore,
+      goalieScore: p.goalieScore,
+      lastSeen:    now,
     };
   });
 
-  // Sender-specific fields (role, alive, ball zone)
+  // Sender-specific fields.
   const sKey = String(parsed.senderId);
   appState.robots[sKey] = {
     ...appState.robots[sKey],
-    playerNum: parsed.senderId,
-    role:      parsed.role,
-    isAlive:   parsed.isAlive,
-    isLead:    false,              // not encoded in 5-byte packet
-    ballZone:  parsed.ballZone,
-    lastSeen:  Date.now(),
+    playerNum:     parsed.senderId,
+    role:          parsed.role,
+    isAlive:       parsed.isAlive,
+    isLead:        parsed.isLead,
+    finalBallZone: parsed.finalBallZone,
+    roleSwitch:    parsed.roleSwitch,
+    roleSwitchTime: parsed.roleSwitch.opcode === 0 ? null : now,
+    senderIp:      rinfo.address,
+    lastSeen:      now,
   };
 
   broadcast();
 });
 
-// ── Stale robot cleanup (mark robots silent for >5 s) ────────────────────────
+// Stale robot cleanup (mark robots silent for >5 s)
 setInterval(() => {
   const now = Date.now();
   let changed = false;
@@ -251,115 +303,10 @@ setInterval(() => {
   if (changed) broadcast();
 }, 1000);
 
-// ── Demo mode ─────────────────────────────────────────────────────────────────
-// Run with:  node server.js --demo
-// Generates moving robots, a live countdown, and penalty/score data so you can
-// test the dashboard without real hardware.
-if (process.argv.includes('--demo')) {
-  console.log('[Demo] Injecting fake robot data every 500 ms');
 
-  const HALF_W = 4400, HALF_H = 2900;  // keep robots inside field boundary
-
-  // Starting positions and velocities for 3 robots
-  const demoRobots = [
-    { playerNum: 1, teamNum: TEAM_ID, role: 0, isAlive: true,  isLead: true,
-      pose: { x: -1500, y:  600, theta:  0.4 }, vel: { x:  60, y:  30, t: 0.04 },
-      ballAge: 0.2, ball: { x: 350, y: 80 }, fallen: false },
-    { playerNum: 2, teamNum: TEAM_ID, role: 1, isAlive: true,  isLead: false,
-      pose: { x: -3800, y:    0, theta:  0.0 }, vel: { x:  10, y:  20, t: 0.02 },
-      ballAge: -1,  ball: { x: 0,   y: 0  }, fallen: false },
-    { playerNum: 3, teamNum: TEAM_ID, role: 2, isAlive: true,  isLead: false,
-      pose: { x:  1200, y: -700, theta:  2.6 }, vel: { x: -50, y:  40, t: -0.03 },
-      ballAge: 1.8, ball: { x: -400, y: 150 }, fallen: false },
-  ];
-
-  appState.gameState = {
-    version: 19,
-    state: 'Playing', gamePhase: 'Normal', setPlay: 'None',
-    firstHalf: true, kickingTeam: TEAM_ID,
-    secsRemaining: 420, secondaryTime: 0,
-    teams: [
-      { teamNumber: TEAM_ID, score: 2, messageBudget: 1180,
-        players: [
-          { playerNum: 1, penalty: 0, secsTillUnpenalised: 0 },
-          { playerNum: 2, penalty: 0, secsTillUnpenalised: 0 },
-          { playerNum: 3, penalty: 0, secsTillUnpenalised: 0 },
-        ] },
-      { teamNumber: 42, score: 1, messageBudget: 950,
-        players: [
-          { playerNum: 1, penalty: 0,  secsTillUnpenalised: 0  },
-          { playerNum: 2, penalty: 9,  secsTillUnpenalised: 18 }, // Pushing
-          { playerNum: 3, penalty: 0,  secsTillUnpenalised: 0  },
-        ] },
-    ],
-  };
-
-  // Decision sequences per role — matches the real brain_tree.cpp states
-  const DECISIONS = {
-    striker:    ['find', 'chase', 'chase', 'adjust', 'kick', 'find'],
-    goalkeeper: ['zone_find', 'retreat', 'chase', 'adjust', 'kick', 'zone_find'],
-    defender:   ['hold', 'chase', 'adjust', 'kick', 'hold'],
-  };
-  const ROLE_KEYS = ['striker', 'goalkeeper', 'defender'];
-
-  let tick = 0;
-  setInterval(() => {
-    tick++;
-
-    // Count down match clock
-    if (appState.gameState.secsRemaining > 0) appState.gameState.secsRemaining--;
-
-    // Move robots (bounce off field boundary)
-    demoRobots.forEach((r, i) => {
-      r.pose.x += r.vel.x + (Math.random() - 0.5) * 20;
-      r.pose.y += r.vel.y + (Math.random() - 0.5) * 20;
-      r.pose.theta += r.vel.t + (Math.random() - 0.5) * 0.05;
-
-      if (Math.abs(r.pose.x) > HALF_W) r.vel.x *= -1;
-      if (Math.abs(r.pose.y) > HALF_H) r.vel.y *= -1;
-      r.pose.x = Math.max(-HALF_W, Math.min(HALF_W, r.pose.x));
-      r.pose.y = Math.max(-HALF_H, Math.min(HALF_H, r.pose.y));
-
-      // Confidence oscillates differently per robot
-      const conf = Math.round(55 + 40 * Math.sin(tick * 0.08 + i * 2.1));
-
-      // Ball age ticks up; robot 1 keeps seeing the ball, others lose it
-      if (r.ballAge >= 0) r.ballAge += 0.5;
-      if (r.ballAge > (i === 0 ? 3 : 6)) r.ballAge = i === 0 ? 0 : -1;
-
-      // Occasionally make robot 3 fallen
-      const fallen = (i === 2) && (Math.floor(tick / 20) % 2 === 1);
-
-      // Cycle through realistic behavior decisions (changes every ~3 s at 0.5 s interval)
-      const roleKey  = ROLE_KEYS[i] ?? 'striker';
-      const decList  = DECISIONS[roleKey];
-      const decIndex = Math.floor(tick / 6) % decList.length;
-      const decision = `${roleKey}-${decList[decIndex]}`;
-
-      appState.robots[String(r.playerNum)] = {
-        ...r, fallen,
-        confidence:   conf,
-        decision,
-        decisionTime: Date.now(),
-        zone:        Math.ceil(((r.pose.x + HALF_W) / (HALF_W * 2)) * 3 + ((r.pose.y + HALF_H) / (HALF_H * 2)) * 3 * 3) || 1,
-        ballZone:    Math.floor(Math.random() * 9) + 1,
-        chaseScore:  Math.round(80 + 50 * Math.sin(tick * 0.1 + i)),
-        goalieScore: Math.round(120 + 80 * Math.cos(tick * 0.07 + i)),
-        senderIp:    `192.168.0.${10 + i}`,
-        lastSeen:    Date.now(),
-        stale:       false,
-      };
-    });
-
-    broadcast();
-  }, 500);
-}
-
-// ── Start ─────────────────────────────────────────────────────────────────────
+// Start
 server.listen(WEB_PORT, () => {
   console.log(`\nRoboCup Dashboard → http://localhost:${WEB_PORT}`);
   console.log(`Team ${TEAM_ID} | GC=:${PORT_GC_DATA} | StatusFwd=:${PORT_STATUS_FWD} | TeamComm=:${PORT_TEAM_COMM}`);
-  if (process.argv.includes('--demo')) console.log('[Demo mode active — no real robots needed]');
-  console.log('\nOverride team ID:  node server.js <team_id>');
-  console.log('Demo mode:         node server.js --demo\n');
+  console.log('\nOverride team ID: node server.js <team_id>\n');
 });

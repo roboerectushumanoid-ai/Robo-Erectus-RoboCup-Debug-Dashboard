@@ -1,5 +1,5 @@
 import { FIELD_H_MM, FIELD_W_MM, ROBOT_COLORS, ROLE_NAMES } from './constants.js';
-import { zoneCenterMm } from './utils.js';
+import { zoneCenterMm, fmtN } from './utils.js';
 
 export function setupFieldCanvas(state) {
   const canvas = document.getElementById('field');
@@ -148,6 +148,31 @@ export function setupFieldCanvas(state) {
     ctx.restore();
   }
 
+  function drawBallLabel(cx, cy, radius, text, isExact) {
+    const fontSize = Math.max(9, scaleMm(210));
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(Math.PI / 2);
+    ctx.font = `bold ${fontSize}px monospace`;
+    const tw = ctx.measureText(text).width;
+    const px = Math.max(4, scaleMm(80));
+    const py = Math.max(2, scaleMm(60));
+    const bw = tw + px * 2;
+    const bh = fontSize + py * 2;
+    const lx = -bw / 2;
+    const ly = radius + Math.max(4, scaleMm(120));
+    ctx.fillStyle = 'rgba(13,17,23,0.9)';
+    ctx.fillRect(lx, ly, bw, bh);
+    ctx.strokeStyle = isExact ? '#3fb950' : '#e3b341';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(lx, ly, bw, bh);
+    ctx.fillStyle = isExact ? '#3fb950' : '#e3b341';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(text, 0, ly + py);
+    ctx.restore();
+  }
+
   function drawZones() {
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.22)';
@@ -257,6 +282,16 @@ export function setupFieldCanvas(state) {
       const br = Math.max(6, scaleMm(180));
       const pos = ballDisplayPosition(cx, cy, br, robotEntries);
       drawFootball(pos.x, pos.y, br);
+      if (state.exactBallMode) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, br + scaleMm(60), 0, Math.PI * 2);
+        ctx.strokeStyle = '#3fb950';
+        ctx.lineWidth = Math.max(1.5, scaleMm(40));
+        ctx.stroke();
+        ctx.restore();
+        drawBallLabel(pos.x, pos.y, br, `${fmtN(bx / 1000, 2)}, ${fmtN(by / 1000, 2)} m`, true);
+      }
     });
 
     if (!seenBalls.length) {
@@ -271,6 +306,17 @@ export function setupFieldCanvas(state) {
         const br = Math.max(8, scaleMm(400));
         const pos = ballDisplayPosition(cx, cy, br, robotEntries);
         drawFootball(pos.x, pos.y, br);
+        if (state.exactBallMode) {
+          ctx.save();
+          ctx.setLineDash([scaleMm(80), scaleMm(80)]);
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, br + scaleMm(60), 0, Math.PI * 2);
+          ctx.strokeStyle = '#e3b341';
+          ctx.lineWidth = Math.max(1.5, scaleMm(40));
+          ctx.stroke();
+          ctx.restore();
+          drawBallLabel(pos.x, pos.y, br, `Zone ${bestZone} \xb7 no exact`, false);
+        }
       }
     }
 

@@ -7,6 +7,7 @@ import { setupSocket } from './socket.js';
 const state = {
   robots: {},
   gcGoalkeeper: null,
+  exactBallMode: false,
 };
 
 const { drawField } = setupFieldCanvas(state);
@@ -41,6 +42,13 @@ function scheduleRender() {
     scheduleRoleSwitchExpiry();
   });
 }
+
+const exactBallBtn = document.getElementById('exact-ball-toggle');
+exactBallBtn.addEventListener('click', () => {
+  state.exactBallMode = !state.exactBallMode;
+  exactBallBtn.classList.toggle('active', state.exactBallMode);
+  scheduleRender();
+});
 
 drawField(state.robots);
 scoreCharts.record(state.robots);

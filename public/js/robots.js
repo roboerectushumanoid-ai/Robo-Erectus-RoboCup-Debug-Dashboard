@@ -79,7 +79,7 @@ export function renderRobots(robots, gcGoalkeeper) {
     const decisionHtml = decision
       ? `<span class="sl">Decision</span><span class="sv"><span class="decision-badge ${decisionClass(decision)}">${decision}</span></span>`
       : '';
-    const roleSwitch = roleSwitchView(robot);
+    const roleSwitch = roleSwitchView(robot, robots);
     const roleSwitchHtml = roleSwitch
       ? `<div class="role-switch-banner ${roleSwitch.cls}">
           <span class="role-switch-main">${roleSwitch.text}</span>

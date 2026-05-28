@@ -1,3 +1,4 @@
+import { ROLE_NAMES } from './constants.js';
 import { roleSwitchView } from './roleSwitch.js';
 
 const STORAGE_KEY = 'scoreHistoryV1';
@@ -6,6 +7,9 @@ const RANGES = {
   '60s': 60 * 1000,
   '5m': MAX_HISTORY_MS,
 };
+const ACTIVE_SCORE_COLOR = '#f0f6fc';
+const STALE_SCORE_COLOR = '#8b949e';
+const LOWEST_SCORE_COLOR = '#3fb950';
 
 function robotEntries(robots) {
   return Object.values(robots ?? {})
@@ -29,7 +33,32 @@ function clampScore(value) {
 function robotTone(robot) {
   if (robot?.stale) return { cls: 'stale', color: '#8b949e', label: 'Stale' };
   if (robot?.isLead) return { cls: 'lead', color: '#3fb950', label: 'Lead' };
-  return { cls: 'active', color: '#f0f6fc', label: 'Active' };
+  return { cls: 'active', color: ACTIVE_SCORE_COLOR, label: 'Active' };
+}
+
+function robotRoleLabel(robot, gcGoalkeeper) {
+  if (gcGoalkeeper !== null && robot?.playerNum === gcGoalkeeper) return 'Goalkeeper';
+  if (robot?.role !== undefined) return ROLE_NAMES[robot.role] ?? `Role ${robot.role}`;
+  return 'Role unknown';
+}
+
+function lowestScorePlayers(entries, key) {
+  const scored = entries
+    .filter(robot => !robot.stale)
+    .map(robot => ({ playerNum: robot.playerNum, value: scoreValue(robot[key]) }))
+    .filter(entry => entry.value !== null);
+  const lowest = Math.min(...scored.map(entry => entry.value));
+
+  if (!Number.isFinite(lowest)) return new Set();
+  return new Set(scored
+    .filter(entry => entry.value === lowest)
+    .map(entry => entry.playerNum));
+}
+
+function scoreTone(robot, lowestPlayers) {
+  if (robot?.stale) return { color: STALE_SCORE_COLOR };
+  if (lowestPlayers.has(robot.playerNum)) return { color: LOWEST_SCORE_COLOR };
+  return { color: ACTIVE_SCORE_COLOR };
 }
 
 function snapshot(robots, now) {
@@ -212,9 +241,12 @@ function buildScoreCard(playerNum) {
   const top = el('div', 'score-graph-top');
   const ident = el('div', 'score-graph-ident');
   const dot = el('span', 'score-robot-dot active');
+  const titleGroup = el('div', 'score-robot-title');
   const title = el('h3', '', `Robot ${playerNum}`);
+  const role = el('span', 'score-robot-role', 'Role unknown');
   const status = el('span', 'score-robot-status', 'Active');
-  ident.append(dot, title, status);
+  titleGroup.append(title, role);
+  ident.append(dot, titleGroup, status);
 
   const values = el('div', 'score-current-values');
   const chaseBox = el('div', 'score-current-box');
@@ -245,8 +277,13 @@ function buildScoreCard(playerNum) {
   return {
     root: card,
     dot,
+    role,
     status,
     roleSwitchBanner,
+    chaseBox,
+    goalieBox,
+    chasePane,
+    goaliePane,
     chaseValue: chaseBox.querySelector('strong'),
     goalieValue: goalieBox.querySelector('strong'),
     chaseCanvas,
@@ -303,6 +340,8 @@ export function setupScoreCharts(state) {
 
   function render() {
     const entries = robotEntries(state.robots);
+    const lowestChasePlayers = lowestScorePlayers(entries, 'chaseScore');
+    const lowestGoaliePlayers = lowestScorePlayers(entries, 'goalieScore');
     syncCards(entries);
 
     if (!entries.length) {
@@ -315,8 +354,9 @@ export function setupScoreCharts(state) {
       const card = cards.get(robot.playerNum);
       const tone = robotTone(robot);
       card.dot.className = `score-robot-dot ${tone.cls}`;
+      card.role.textContent = robotRoleLabel(robot, state.gcGoalkeeper);
       card.status.textContent = tone.label;
-      const roleSwitch = roleSwitchView(robot);
+      const roleSwitch = roleSwitchView(robot, state.robots);
       if (roleSwitch) {
         card.roleSwitchBanner.className = `role-switch-banner ${roleSwitch.cls}`;
         card.roleSwitchBanner.replaceChildren(
@@ -330,8 +370,30 @@ export function setupScoreCharts(state) {
 
       card.chaseValue.textContent = fmtScore(scoreValue(robot.chaseScore));
       card.goalieValue.textContent = fmtScore(scoreValue(robot.goalieScore));
-      drawMetricChart(card.chaseCanvas, history, robot.playerNum, 'chaseScore', 'Chase Score', tone, RANGES[activeRange]);
-      drawMetricChart(card.goalieCanvas, history, robot.playerNum, 'goalieScore', 'Goalie Score', tone, RANGES[activeRange]);
+      const hasLowestChaseScore = lowestChasePlayers.has(robot.playerNum);
+      const hasLowestGoalieScore = lowestGoaliePlayers.has(robot.playerNum);
+      card.chaseBox.classList.toggle('lowest', hasLowestChaseScore);
+      card.goalieBox.classList.toggle('lowest', hasLowestGoalieScore);
+      card.chasePane.classList.toggle('lowest', hasLowestChaseScore);
+      card.goaliePane.classList.toggle('lowest', hasLowestGoalieScore);
+      drawMetricChart(
+        card.chaseCanvas,
+        history,
+        robot.playerNum,
+        'chaseScore',
+        'Chase Score',
+        scoreTone(robot, lowestChasePlayers),
+        RANGES[activeRange],
+      );
+      drawMetricChart(
+        card.goalieCanvas,
+        history,
+        robot.playerNum,
+        'goalieScore',
+        'Goalie Score',
+        scoreTone(robot, lowestGoaliePlayers),
+        RANGES[activeRange],
+      );
     });
   }
 

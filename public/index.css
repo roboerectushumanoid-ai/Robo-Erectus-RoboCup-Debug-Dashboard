@@ -549,10 +549,24 @@
       gap: 7px;
       min-width: 0;
     }
+    .score-robot-title {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+    }
     .score-graph-ident h3 {
       color: #e6edf3;
       font-size: 13px;
       font-weight: 700;
+      white-space: nowrap;
+    }
+    .score-robot-role {
+      color: #8b949e;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
       white-space: nowrap;
     }
     .score-current-values {
@@ -583,6 +597,13 @@
       font-size: 18px;
       line-height: 1.1;
     }
+    .score-current-box.lowest {
+      border-color: #3fb950;
+      background: rgba(63, 185, 80, 0.08);
+    }
+    .score-current-box.lowest strong {
+      color: #56d364;
+    }
     .score-chart-pair {
       flex: 1;
       min-height: 0;
@@ -605,6 +626,9 @@
       text-transform: uppercase;
       flex-shrink: 0;
     }
+    .score-chart-pane.lowest .score-chart-title {
+      color: #56d364;
+    }
     .score-robot-canvas {
       width: 100%;
       flex: 1;
@@ -612,6 +636,9 @@
       border-radius: 4px;
       border: 1px solid #30363d;
       background: #0d1117;
+    }
+    .score-chart-pane.lowest .score-robot-canvas {
+      border-color: #3fb950;
     }
     .score-empty {
       grid-column: 1 / -1;

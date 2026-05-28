@@ -1,4 +1,5 @@
 import { setupFieldCanvas } from './field.js';
+import { setupExamples } from './examples.js';
 import { renderLegend, renderRobots } from './robots.js';
 import { setupRos } from './ros.js';
 import { setupScoreCharts } from './scoreCharts.js';
@@ -46,3 +47,4 @@ drawField(state.robots);
 scoreCharts.record(state.robots);
 setupSocket({ state, scheduleRender });
 setupRos({ state, scheduleRender });
+setupExamples();

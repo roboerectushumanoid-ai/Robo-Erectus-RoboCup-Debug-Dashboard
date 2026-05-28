@@ -5,6 +5,8 @@ const http    = require('http');
 const { Server } = require('socket.io');
 const dgram   = require('dgram');
 const path    = require('path');
+const fs      = require('fs');
+const { spawn, spawnSync } = require('child_process');
 
 // Config
 // Accept team ID as any numeric argument.
@@ -24,6 +26,100 @@ const appState = {
   gameState: null,
   robots: {},    // keyed by playerNum string
 };
+
+const EXAMPLE_DIR = path.join(__dirname, 'examples', 'team_comm_sim');
+const EXAMPLES = [
+  {
+    id: 'simulate_game',
+    label: 'Moving game simulation',
+    file: 'simulate_game.py',
+    description: 'Broadcasts moving zones, changing scores, roles, and lead state for 60 seconds.',
+    args: teamId => ['--team-id', String(teamId), '--address', '127.0.0.1', '--duration', '60'],
+  },
+  {
+    id: 'role_switch_ack',
+    label: 'Role-switch ACK scenario',
+    file: 'send_role_switch_ack.py',
+    description: 'Runs the goalie role-switch request and ACK handshake example.',
+    args: teamId => ['--team-id', String(teamId), '--address', '127.0.0.1', '--players', '1,2,3'],
+  },
+];
+let runningExample = null;
+const exampleLog = [];
+
+function pathLooksLikePythonInstaller(command) {
+  return /^python-\d+\.\d+.*(?:amd64|win32|arm64)\.exe$/i.test(path.basename(command));
+}
+
+function pythonVersion(command, args = []) {
+  const result = spawnSync(command, [...args, '--version'], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
+  return result.error ? null : (/^Python\s+\d+/i.test(output) ? output : null);
+}
+
+function resolvePythonCommand() {
+  const warnings = [];
+  const envPython = process.env.PYTHON || process.env.python;
+  const candidates = [];
+
+  if (envPython) {
+    if (path.isAbsolute(envPython) || envPython.includes(path.sep)) {
+      if (!fs.existsSync(envPython)) {
+        warnings.push(`Ignoring PYTHON=${envPython}: file does not exist`);
+      } else if (pathLooksLikePythonInstaller(envPython)) {
+        warnings.push(`Ignoring PYTHON=${envPython}: this looks like a Python installer, not python.exe`);
+      } else {
+        candidates.push({ command: envPython, args: [] });
+      }
+    } else {
+      candidates.push({ command: envPython, args: [] });
+    }
+  }
+
+  candidates.push(
+    { command: process.platform === 'win32' ? 'python' : 'python3', args: [] },
+    { command: 'python3', args: [] },
+  );
+  if (process.platform === 'win32') candidates.push({ command: 'py', args: ['-3'] });
+
+  for (const candidate of candidates) {
+    const version = pythonVersion(candidate.command, candidate.args);
+    if (version) return { ...candidate, version, warnings };
+  }
+
+  return { command: null, args: [], version: null, warnings };
+}
+
+function appendExampleLog(line) {
+  const text = String(line).trimEnd();
+  if (!text) return;
+  exampleLog.push(...text.split(/\r?\n/).map(entry => `[${new Date().toLocaleTimeString()}] ${entry}`));
+  while (exampleLog.length > 80) exampleLog.shift();
+}
+
+function publicExample(example) {
+  return {
+    id: example.id,
+    label: example.label,
+    description: example.description,
+    running: runningExample?.id === example.id,
+  };
+}
+
+function exampleStatus() {
+  return {
+    running: runningExample ? {
+      id: runningExample.id,
+      label: runningExample.label,
+      pid: runningExample.process.pid,
+      startedAt: runningExample.startedAt,
+    } : null,
+    log: exampleLog,
+  };
+}
 
 // Parsers
 
@@ -201,7 +297,77 @@ const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server);
 
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/api/examples', (req, res) => {
+  res.json({ examples: EXAMPLES.map(publicExample), ...exampleStatus() });
+});
+
+app.post('/api/examples/run', (req, res) => {
+  const example = EXAMPLES.find(item => item.id === req.body?.id);
+  if (!example) {
+    res.status(404).json({ error: 'Unknown example script' });
+    return;
+  }
+
+  if (runningExample) {
+    res.status(409).json({ error: `${runningExample.label} is already running`, ...exampleStatus() });
+    return;
+  }
+
+  const scriptPath = path.join(EXAMPLE_DIR, example.file);
+  if (!scriptPath.startsWith(EXAMPLE_DIR) || !fs.existsSync(scriptPath)) {
+    res.status(500).json({ error: 'Example script is missing' });
+    return;
+  }
+
+  const python = resolvePythonCommand();
+  python.warnings.forEach(appendExampleLog);
+  if (!python.command) {
+    appendExampleLog('Could not find a usable Python interpreter. Install Python or set PYTHON to python.exe.');
+    res.status(500).json({ error: 'Could not find a usable Python interpreter', ...exampleStatus() });
+    return;
+  }
+
+  const args = [...python.args, scriptPath, ...example.args(TEAM_ID)];
+  const child = spawn(python.command, args, {
+    cwd: EXAMPLE_DIR,
+    windowsHide: true,
+  });
+  runningExample = {
+    id: example.id,
+    label: example.label,
+    process: child,
+    startedAt: Date.now(),
+  };
+  appendExampleLog(`Using ${python.version}`);
+  appendExampleLog(`Started ${example.label}: ${python.command} ${args.map(arg => path.basename(arg) === arg ? arg : path.basename(arg)).join(' ')}`);
+
+  child.stdout.on('data', chunk => appendExampleLog(chunk.toString()));
+  child.stderr.on('data', chunk => appendExampleLog(chunk.toString()));
+  child.on('error', err => {
+    appendExampleLog(`Failed to start ${example.label}: ${err.message}`);
+    if (runningExample?.process === child) runningExample = null;
+  });
+  child.on('close', code => {
+    appendExampleLog(`${example.label} exited with code ${code}`);
+    if (runningExample?.process === child) runningExample = null;
+  });
+
+  res.json(exampleStatus());
+});
+
+app.post('/api/examples/stop', (req, res) => {
+  if (!runningExample) {
+    res.json(exampleStatus());
+    return;
+  }
+
+  appendExampleLog(`Stopping ${runningExample.label}`);
+  runningExample.process.kill();
+  res.json(exampleStatus());
+});
 
 io.on('connection', socket => {
   socket.emit('state', { ...appState, teamId: TEAM_ID });

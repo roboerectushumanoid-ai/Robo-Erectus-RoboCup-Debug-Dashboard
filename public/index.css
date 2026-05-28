@@ -406,6 +406,7 @@
 
     /* ── ROS Bridge panel ─────────────────────────────────────── */
     #ros-toggle,
+    #examples-toggle,
     #scores-toggle,
     #scores-clear {
       background: none; border: 1px solid #30363d;
@@ -414,11 +415,13 @@
       transition: color 0.2s, border-color 0.2s;
     }
     #ros-toggle:hover,
+    #examples-toggle:hover,
     #scores-toggle:hover,
     #scores-clear:hover {
       color: #58a6ff; border-color: #58a6ff;
     }
     #ros-toggle.active,
+    #examples-toggle.active,
     #scores-toggle.active {
       color: #3fb950; border-color: #3fb950;
     }
@@ -685,6 +688,68 @@
     #ros-panel h2   { font-size: 12px; font-weight: 700; color: #58a6ff; text-transform: uppercase; letter-spacing: 1px; }
     #ros-panel p    { font-size: 11px; color: #8b949e; line-height: 1.6; }
     #ros-panel code { color: #3fb950; font-family: monospace; }
+
+    #examples-panel {
+      position: fixed; top: 38px; right: 0; width: 380px;
+      background: #161b22; border-left: 1px solid #30363d;
+      border-bottom: 1px solid #30363d; padding: 14px;
+      z-index: 210; display: none; flex-direction: column; gap: 10px;
+      box-shadow: -6px 6px 24px rgba(0,0,0,0.5);
+    }
+    #examples-panel.open { display: flex; }
+    #examples-panel h2 {
+      font-size: 12px; font-weight: 700; color: #58a6ff;
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    #examples-panel p {
+      font-size: 11px; color: #8b949e; line-height: 1.6;
+    }
+    #examples-panel code { color: #3fb950; font-family: monospace; }
+    .examples-controls {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 6px;
+      align-items: center;
+    }
+    .examples-select {
+      min-width: 0;
+      background: #21262d; border: 1px solid #30363d;
+      color: #e6edf3; padding: 4px 8px; border-radius: 4px;
+      font-size: 12px; font-family: monospace;
+    }
+    .examples-select:focus {
+      outline: none; border-color: #58a6ff;
+    }
+    .examples-btn {
+      padding: 4px 10px; border-radius: 4px; font-size: 11px;
+      cursor: pointer; border: 1px solid #30363d;
+      background: #21262d; color: #c9d1d9; white-space: nowrap;
+      transition: color 0.2s, border-color 0.2s, opacity 0.2s;
+    }
+    .examples-btn:hover:not(:disabled) {
+      border-color: #58a6ff; color: #58a6ff;
+    }
+    .examples-btn:disabled {
+      cursor: not-allowed; opacity: 0.45;
+    }
+    .examples-status {
+      min-height: 16px;
+      color: #8b949e;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .examples-log {
+      min-height: 130px;
+      max-height: 260px;
+      overflow: auto;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #30363d;
+      background: #0d1117;
+      color: #c9d1d9;
+      font: 10px/1.45 Consolas, monospace;
+      white-space: pre-wrap;
+    }
 
     .ros-row { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
     .ros-sel, .ros-ip {

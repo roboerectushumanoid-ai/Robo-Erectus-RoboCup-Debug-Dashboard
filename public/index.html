@@ -13,9 +13,23 @@
     <span id="conn-status">Connecting…</span>
     <button id="scores-toggle">Scores</button>
     <button id="scores-clear">Clear Scores</button>
+    <button id="examples-toggle">Examples</button>
     <button id="ros-toggle">⚙ ROS Bridge</button>
   </div>
 </header>
+
+<!-- Example runner drawer -->
+<div id="examples-panel">
+  <h2>Example Runner</h2>
+  <p>Run a sample Python broadcaster from <code>examples/team_comm_sim</code>.</p>
+  <div class="examples-controls">
+    <select id="examples-select" class="examples-select" title="Example script"></select>
+    <button class="examples-btn" id="examples-run">Run</button>
+    <button class="examples-btn" id="examples-stop" disabled>Stop</button>
+  </div>
+  <div id="examples-status" class="examples-status">Loading examples...</div>
+  <pre id="examples-log" class="examples-log">No example output yet.</pre>
+</div>
 
 <!-- ROS Bridge settings drawer -->
 <div id="ros-panel">

@@ -540,14 +540,15 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 16px;
       flex-shrink: 0;
     }
     .score-graph-ident {
       display: flex;
       align-items: center;
-      gap: 7px;
+      gap: 10px;
       min-width: 0;
+      flex: 1 1 auto;
     }
     .score-robot-title {
       display: flex;
@@ -568,6 +569,16 @@
       letter-spacing: 0.5px;
       text-transform: uppercase;
       white-space: nowrap;
+    }
+    .score-robot-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 58px;
+      padding: 0 10px;
+      border-left: 1px solid #30363d;
+      border-right: 1px solid #30363d;
+      align-self: stretch;
     }
     .score-current-values {
       display: flex;

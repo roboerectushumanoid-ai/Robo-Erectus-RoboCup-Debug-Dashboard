@@ -246,7 +246,9 @@ function buildScoreCard(playerNum) {
   const role = el('span', 'score-robot-role', 'Role unknown');
   const status = el('span', 'score-robot-status', 'Active');
   titleGroup.append(title, role);
-  ident.append(dot, titleGroup, status);
+  ident.append(dot, titleGroup);
+  const statusWrap = el('div', 'score-robot-state');
+  statusWrap.append(status);
 
   const values = el('div', 'score-current-values');
   const chaseBox = el('div', 'score-current-box');
@@ -254,7 +256,7 @@ function buildScoreCard(playerNum) {
   const goalieBox = el('div', 'score-current-box');
   goalieBox.append(el('span', '', 'Goalie'), el('strong', '', '-'));
   values.append(chaseBox, goalieBox);
-  top.append(ident, values);
+  top.append(ident, statusWrap, values);
   const roleSwitchBanner = el('div', 'role-switch-banner');
   roleSwitchBanner.hidden = true;
 

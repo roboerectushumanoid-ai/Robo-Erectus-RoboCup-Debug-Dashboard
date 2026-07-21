@@ -26,7 +26,16 @@ function ballConfidenceIcon(conf) {
   </span>`;
 }
 
-export function renderRobots(robots, gcGoalkeeper, fieldMode, onTrackAction) {
+export function setupRobotsPanel(onTrackAction) {
+  const panel = document.getElementById('robots-panel');
+  panel.addEventListener('click', e => {
+    const btn = e.target.closest('.track-btn');
+    if (!btn) return;
+    onTrackAction(parseInt(btn.dataset.player, 10), btn.dataset.action);
+  });
+}
+
+export function renderRobots(robots, gcGoalkeeper, fieldMode) {
   const panel = document.getElementById('robots-panel');
   const list = [1, 2, 3].map(playerNum => robots[String(playerNum)] ?? { playerNum, empty: true });
 
@@ -140,12 +149,6 @@ export function renderRobots(robots, gcGoalkeeper, fieldMode, onTrackAction) {
   </div>
 </div>`;
   }).join('');
-
-  if (onTrackAction) {
-    panel.querySelectorAll('.track-btn').forEach(btn => {
-      btn.addEventListener('click', () => onTrackAction(parseInt(btn.dataset.player, 10), btn.dataset.action));
-    });
-  }
 }
 
 export function renderLegend(robots, gcGoalkeeper) {

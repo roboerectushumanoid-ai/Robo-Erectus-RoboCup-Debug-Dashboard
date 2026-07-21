@@ -1,6 +1,6 @@
 import { setupFieldCanvas } from './field.js';
 import { setupExamples } from './examples.js';
-import { renderLegend, renderRobots } from './robots.js';
+import { renderLegend, renderRobots, setupRobotsPanel } from './robots.js';
 import { setupRos } from './ros.js';
 import { setupScoreCharts } from './scoreCharts.js';
 import { setupSocket } from './socket.js';
@@ -53,7 +53,7 @@ function scheduleRender() {
   requestAnimationFrame(() => {
     renderPending = false;
     drawField(state.robots);
-    renderRobots(state.robots, state.gcGoalkeeper, state.fieldMode, handleTrackAction);
+    renderRobots(state.robots, state.gcGoalkeeper, state.fieldMode);
     renderLegend(state.robots, state.gcGoalkeeper);
     scoreCharts.record(state.robots);
     scheduleRoleSwitchExpiry();
@@ -62,6 +62,7 @@ function scheduleRender() {
 
 drawField(state.robots);
 scoreCharts.record(state.robots);
+setupRobotsPanel(handleTrackAction);
 setupSocket({ state, scheduleRender });
 setupRos({ state, scheduleRender });
 setupExamples();

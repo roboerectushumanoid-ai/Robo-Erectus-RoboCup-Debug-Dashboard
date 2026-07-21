@@ -52,8 +52,11 @@ export function renderRobots(robots, gcGoalkeeper, fieldMode, onTrackAction) {
     const statusColor = robot.stale ? '#8b949e' : robot.isLead ? '#2ea043' : '#f0f6fc';
     const avatarTextColor = robot.stale || robot.isLead ? '#ffffff' : '#0d1117';
     const conf = robot.confidence ?? 0;
-    let role = robot.role !== undefined ? (ROLE_NAMES[robot.role] ?? `Role ${robot.role}`) : '–';
-    if (gcGoalkeeper !== null && robot.playerNum === gcGoalkeeper) role = 'Goalkeeper';
+    const role = robot.role !== undefined ? (ROLE_NAMES[robot.role] ?? `Role ${robot.role}`) : '–';
+    const isGcGoalkeeper = gcGoalkeeper !== null && robot.playerNum === gcGoalkeeper;
+    const gcTag = isGcGoalkeeper && role !== 'Goalkeeper'
+      ? ' <span class="gc-gk-tag" title="GameController-designated goalkeeper">GC: GK</span>'
+      : '';
 
     const badges = [];
     if (robot.stale) badges.push('<span class="badge badge-stale">Stale</span>');
@@ -112,7 +115,7 @@ export function renderRobots(robots, gcGoalkeeper, fieldMode, onTrackAction) {
     <div class="card-avatar" style="background:${statusColor};color:${avatarTextColor}">${robot.playerNum}</div>
     <div>
       <div class="card-title" style="color:${statusColor}">Robot ${robot.playerNum}${leadIcon}</div>
-      <div class="card-role">${role}</div>
+      <div class="card-role">${role}${gcTag}</div>
     </div>
   </div>
   <div class="badges">${badges.join('')}</div>
@@ -150,11 +153,12 @@ export function renderLegend(robots, gcGoalkeeper) {
     .sort((a, b) => a.playerNum - b.playerNum)
     .map(robot => {
       const color = ROBOT_COLORS[(robot.playerNum - 1) % ROBOT_COLORS.length];
-      let role = robot.role !== undefined ? ROLE_NAMES[robot.role] ?? '' : '';
-      if (gcGoalkeeper !== null && robot.playerNum === gcGoalkeeper) role = 'Goalkeeper';
+      const role = robot.role !== undefined ? ROLE_NAMES[robot.role] ?? '' : '';
+      const isGcGoalkeeper = gcGoalkeeper !== null && robot.playerNum === gcGoalkeeper;
+      const roleLabel = isGcGoalkeeper && role !== 'Goalkeeper' ? `${role} (GC: GK)` : role;
       return `<span class="legend-item">
         <span class="legend-dot" style="background:${color}"></span>
-        R${robot.playerNum}${role ? ' · ' + role : ''}
+        R${robot.playerNum}${roleLabel ? ' · ' + roleLabel : ''}
       </span>`;
     }).join('');
 }

@@ -37,9 +37,9 @@ function robotTone(robot) {
 }
 
 function robotRoleLabel(robot, gcGoalkeeper) {
-  if (gcGoalkeeper !== null && robot?.playerNum === gcGoalkeeper) return 'Goalkeeper';
-  if (robot?.role !== undefined) return ROLE_NAMES[robot.role] ?? `Role ${robot.role}`;
-  return 'Role unknown';
+  const role = robot?.role !== undefined ? (ROLE_NAMES[robot.role] ?? `Role ${robot.role}`) : 'Role unknown';
+  const isGcGoalkeeper = gcGoalkeeper !== null && robot?.playerNum === gcGoalkeeper;
+  return isGcGoalkeeper && role !== 'Goalkeeper' ? `${role} (GC: GK)` : role;
 }
 
 function lowestScorePlayers(entries, key) {

@@ -263,6 +263,18 @@
     }
     .card-role  { font-size: 11px; color: #8b949e; }
     .card-avatar-empty { background: #30363d; color: #8b949e; }
+    .gc-gk-tag {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e3b341;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      vertical-align: middle;
+    }
 
     .badges {
       grid-column: 3; grid-row: 1;

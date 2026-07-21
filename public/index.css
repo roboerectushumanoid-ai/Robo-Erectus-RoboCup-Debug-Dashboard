@@ -494,6 +494,30 @@
       background: #12331f;
       color: #56d364;
     }
+    .field-mode-toggle {
+      display: inline-flex;
+      align-self: flex-start;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .field-mode-btn {
+      min-width: 96px;
+      border: 0;
+      border-right: 1px solid #30363d;
+      background: #21262d;
+      color: #8b949e;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: Consolas, monospace;
+    }
+    .field-mode-btn:last-child { border-right: 0; }
+    .field-mode-btn.active {
+      background: #12331f;
+      color: #56d364;
+    }
     .score-line-key {
       display: flex;
       align-items: center;
@@ -770,6 +794,20 @@
     .ros-btn.ok    { background: #122112; border-color: #3fb950; color: #3fb950; }
     .ros-btn.err   { background: #211212; border-color: #f85149; color: #f85149; }
     .ros-stat { font-size: 10px; color: #8b949e; min-width: 16px; }
+
+    .track-btn {
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #c9d1d9;
+      font-family: Consolas, monospace;
+      margin-right: 4px;
+    }
+    .track-btn:hover:not(:disabled) { border-color: #58a6ff; color: #58a6ff; }
+    .track-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     /* Decision badge in robot cards */
     .decision-badge {

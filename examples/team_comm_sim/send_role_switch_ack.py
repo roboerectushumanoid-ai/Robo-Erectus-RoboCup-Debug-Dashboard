@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Simulate compact team-communication packets and goalie role-switch handshakes.
 
-This sends the same 14-byte compact UDP packet format decoded by
+This sends the same 16-byte compact UDP packet format decoded by
 src/robot_communication/src/robot_communication_node.cpp.
 """
 
@@ -27,6 +27,10 @@ OP_CANCEL = 3
 
 COMPACT_READY_MASK = 0x40
 COMPACT_ACTIVE_BALL_ACTION_MASK = 0x80
+
+# Must match field_length/field_width defaults in robot_communication_node.cpp.
+FIELD_LENGTH_M = 14.0
+FIELD_WIDTH_M = 9.0
 
 
 ROLE_NAMES = {
@@ -77,6 +81,22 @@ def require_zone(value: int) -> int:
     if value < 0 or value > 9:
         raise ValueError(f"zone must be 0..9, got {value}")
     return value
+
+
+def ball_coord_to_byte(coord_m: float, extent_m: float) -> int:
+    normalized = (coord_m + extent_m * 0.5) / extent_m
+    return clamp_byte(round(max(0.0, min(1.0, normalized)) * 255))
+
+
+def zone_center_m(zone: int, field_length: float = FIELD_LENGTH_M, field_width: float = FIELD_WIDTH_M):
+    if zone < 1 or zone > 9:
+        return (0.0, 0.0)
+    idx = zone - 1
+    col = idx // 3
+    row_from_top = idx % 3
+    x = -field_length / 2 + field_length * (col + 0.5) / 3
+    y = field_width / 2 - field_width * (row_from_top + 0.5) / 3
+    return (x, y)
 
 
 def role_switch(opcode: int, seq: int, target: int, role: int) -> int:
@@ -130,14 +150,22 @@ def build_packet(
         chase_scores[player_id] = clamp_byte(state.chase_score)
         goalie_scores[player_id] = clamp_byte(state.goalie_score)
 
-    packet = bytearray(14)
+    final_ball_zone = require_zone(final_ball_zone)
+    if final_ball_zone == 0:
+        ball_x_byte, ball_y_byte = 0, 0
+    else:
+        ball_x_m, ball_y_m = zone_center_m(final_ball_zone)
+        ball_x_byte = ball_coord_to_byte(ball_x_m, FIELD_LENGTH_M)
+        ball_y_byte = ball_coord_to_byte(ball_y_m, FIELD_WIDTH_M)
+
+    packet = bytearray(16)
     packet[0] = clamp_byte(password)
     packet[1] = identity
     packet[2] = (zones[1] << 4) | zones[2]
     packet[3] = (zones[3] << 4) | ball_zones[1]
     packet[4] = (ball_zones[2] << 4) | ball_zones[3]
     packet[5] = (confidences[1] << 4) | confidences[2]
-    packet[6] = (confidences[3] << 4) | require_zone(final_ball_zone)
+    packet[6] = (confidences[3] << 4) | final_ball_zone
     packet[7] = chase_scores[1]
     packet[8] = chase_scores[2]
     packet[9] = chase_scores[3]
@@ -145,6 +173,8 @@ def build_packet(
     packet[11] = goalie_scores[2]
     packet[12] = goalie_scores[3]
     packet[13] = control
+    packet[14] = ball_x_byte
+    packet[15] = ball_y_byte
     return bytes(packet)
 
 

@@ -1,7 +1,7 @@
 import { FIELD_H_MM, FIELD_W_MM, ROBOT_COLORS, ROLE_NAMES } from './constants.js';
 import { zoneCenterMm } from './utils.js';
 
-export function setupFieldCanvas(state) {
+export function setupFieldCanvas(state, scheduleRender) {
   const canvas = document.getElementById('field');
   const canvasWrap = document.getElementById('canvas-wrap');
   const ctx = canvas.getContext('2d');
@@ -57,9 +57,19 @@ export function setupFieldCanvas(state) {
     };
   }
 
-  function getRobotDrawEntries(robots) {
+  function getRobotDrawEntries(robots, mode) {
+    if (mode === 'pose') {
+      return Object.values(robots)
+        .filter(robot => robot.rosPose)
+        .map(robot => {
+          const { x, y, theta } = robot.rosPose;
+          const [rx, ry] = fieldToCanvas(x, y);
+          return { robot, x, y, theta, rx, ry };
+        });
+    }
+
     const zoneOnlyRobots = Object.values(robots)
-      .filter(robot => !robot.pose && robot.zone > 0)
+      .filter(robot => robot.zone > 0)
       .sort((a, b) => a.playerNum - b.playerNum);
     const zoneGroups = new Map();
     zoneOnlyRobots.forEach(robot => {
@@ -69,19 +79,38 @@ export function setupFieldCanvas(state) {
     });
 
     return Object.values(robots).map(robot => {
-      const zc = !robot.pose && robot.zone > 0 ? zoneCenterMm(robot.zone) : null;
-      if (!robot.pose && !zc) return null;
-      let { x, y, theta } = robot.pose ?? { x: zc.x, y: zc.y, theta: 0 };
-      if (!robot.pose && zc) {
-        const group = zoneGroups.get(String(robot.zone)) ?? [];
-        const offset = zoneSpreadOffset(group.indexOf(robot.playerNum), group.length);
-        x += offset.x;
-        y += offset.y;
-      }
+      const zc = robot.zone > 0 ? zoneCenterMm(robot.zone) : null;
+      if (!zc) return null;
+      let { x, y } = zc;
+      const theta = 0;
+      const group = zoneGroups.get(String(robot.zone)) ?? [];
+      const offset = zoneSpreadOffset(group.indexOf(robot.playerNum), group.length);
+      x += offset.x;
+      y += offset.y;
 
       const [rx, ry] = fieldToCanvas(x, y);
       return { robot, x, y, theta, rx, ry };
     }).filter(Boolean);
+  }
+
+  function drawTrail(entries) {
+    entries.forEach(({ robot }) => {
+      if (!robot.trail || robot.trail.length < 2) return;
+      const color = ROBOT_COLORS[(robot.playerNum - 1) % ROBOT_COLORS.length];
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = Math.max(1.5, scaleMm(45));
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      robot.trail.forEach((pt, i) => {
+        const [px, py] = fieldToCanvas(pt.x, pt.y);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+      ctx.restore();
+    });
   }
 
   function ballDisplayPosition(cx, cy, radius, robotEntries) {
@@ -243,7 +272,8 @@ export function setupFieldCanvas(state) {
       ctx.fill();
     });
 
-    const robotEntries = getRobotDrawEntries(robots);
+    const robotEntries = getRobotDrawEntries(robots, state.fieldMode);
+    drawTrail(robotEntries);
     const seenBalls = [];
     Object.values(robots).forEach(robot => {
       if (!robot.pose || robot.ballAge < 0 || robot.ballAge > 3 || !robot.ball) return;
@@ -347,6 +377,16 @@ export function setupFieldCanvas(state) {
     canvas.style.height = `${displayHeight}px`;
     drawField(state.robots);
   }).observe(canvasWrap);
+
+  const modeButtons = [...document.querySelectorAll('.field-mode-btn')];
+  function setFieldMode(mode) {
+    state.fieldMode = mode;
+    modeButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
+    // The sidebar's tracking controls are only shown in pose mode, so a mode
+    // switch needs to re-render the robot cards too, not just the canvas.
+    scheduleRender();
+  }
+  modeButtons.forEach(btn => btn.addEventListener('click', () => setFieldMode(btn.dataset.mode)));
 
   return { drawField };
 }

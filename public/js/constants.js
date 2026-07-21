@@ -3,6 +3,11 @@ export const FIELD_H_MM = 9000;
 
 export const ROBOT_COLORS = ['#58a6ff', '#3fb950', '#f0883e', '#a371f7', '#ffa657'];
 
+// Path-tracking trail sampling: skip points closer than this (avoids flooding
+// the array while a robot is stationary), cap length as a safety valve.
+export const TRAIL_MIN_DIST_MM = 40;
+export const TRAIL_MAX_POINTS = 4000;
+
 // Matches CompactRole enum: 0=unknown, 1=striker, 2=goalkeeper, 3=defender.
 export const ROLE_NAMES = ['Unknown', 'Striker', 'Goalkeeper', 'Defender'];
 

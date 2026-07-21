@@ -66,6 +66,10 @@ export function setupSocket({ state, scheduleRender }) {
         decisionTime: prev.decisionTime,
         rosBallAbs: prev.rosBallAbs,
         kickEvent: prev.kickEvent,
+        rosPose: prev.rosPose,
+        rosPoseTime: prev.rosPoseTime,
+        tracking: prev.tracking,
+        trail: prev.trail,
         roleSwitchTime,
         stale: serverRobot.stale && !rosSeen ? true : (serverRobot.stale === false ? false : prev.stale),
       };

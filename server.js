@@ -17,6 +17,12 @@ const PORT_STATUS_FWD = 3738;          // GameController re-broadcasts robot sta
 const PORT_TEAM_COMM  = 10000 + TEAM_ID; // robot-to-robot compact packets
 const WEB_PORT        = 8080;
 
+// Must match field_length/field_width defaults in robot_communication_node.cpp
+// (and FIELD_W_MM/FIELD_H_MM in public/js/constants.js) — used to decode the
+// quantized ball x/y bytes in the compact team-comm packet.
+const FIELD_LENGTH_MM = 14000;
+const FIELD_WIDTH_MM  = 9000;
+
 const STATE_NAMES     = ['Initial', 'Ready', 'Set', 'Playing', 'Finished'];
 const PHASE_NAMES     = ['Normal', 'PenaltyShootOut', 'ExtraTime', 'Timeout'];
 const SET_PLAY_NAMES  = ['None', 'DirectFreeKick', 'IndirectFreeKick', 'PenaltyKick', 'ThrowIn', 'GoalKick', 'CornerKick'];
@@ -218,7 +224,7 @@ function parseReturnData(buf) {
   };
 }
 
-// CompactTeamPacket (14 bytes, from robot_communication_node.cpp)
+// CompactTeamPacket (16 bytes, from robot_communication_node.cpp)
 // byte[0]  password (0xA7)
 // byte[1]  identity: lead(7), alive(6), role(5-4), sender player id(3-0)
 // byte[2]  player1 zone(7-4), player2 zone(3-0)
@@ -229,8 +235,10 @@ function parseReturnData(buf) {
 // byte[7-9]   player1-3 chase scores
 // byte[10-12] player1-3 goalie scores
 // byte[13] role-switch control: opcode(7-6), seq(5-4), target(3-2), role(1-0)
+// byte[14] ball x, quantized over field_length; only valid when final ball zone != 0
+// byte[15] ball y, quantized over field_width;  only valid when final ball zone != 0
 function parseTeamComm(buf) {
-  if (buf.length !== 14) return null;
+  if (buf.length !== 16) return null;
   if (buf[0] !== 0xA7) return null;
 
   const identity = buf[1];
@@ -281,12 +289,22 @@ function parseTeamComm(buf) {
     goalieScore: buf[10 + i] * 100 / 255,
   }));
 
+  // Precise ball x/y (bytes 14-15) only mean anything once final ball zone
+  // confirms the sender actually has a confident ball reading.
+  const ball = finalBallZone > 0
+    ? {
+        x: (buf[14] / 255) * FIELD_LENGTH_MM - FIELD_LENGTH_MM / 2,
+        y: (buf[15] / 255) * FIELD_WIDTH_MM - FIELD_WIDTH_MM / 2,
+      }
+    : null;
+
   return {
     senderId,
     role,
     isAlive,
     isLead,
     finalBallZone,
+    ball,
     roleSwitch,
     players,
   };
@@ -449,6 +467,7 @@ makeUdp(PORT_TEAM_COMM, 'Team-Comm', (msg, rinfo) => {
     isAlive:       parsed.isAlive,
     isLead:        parsed.isLead,
     finalBallZone: parsed.finalBallZone,
+    rosBallAbs:    parsed.ball,
     roleSwitch:    parsed.roleSwitch,
     roleSwitchTime: parsed.roleSwitch.opcode === 0 ? null : now,
     senderIp:      rinfo.address,

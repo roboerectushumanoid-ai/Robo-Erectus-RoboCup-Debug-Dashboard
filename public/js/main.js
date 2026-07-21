@@ -8,9 +8,10 @@ import { setupSocket } from './socket.js';
 const state = {
   robots: {},
   gcGoalkeeper: null,
+  fieldMode: 'zone',
 };
 
-const { drawField } = setupFieldCanvas(state);
+const { drawField } = setupFieldCanvas(state, scheduleRender);
 const scoreCharts = setupScoreCharts(state);
 
 let renderPending = false;
@@ -29,6 +30,22 @@ function scheduleRoleSwitchExpiry() {
   }, 8200);
 }
 
+function handleTrackAction(playerNum, action) {
+  const robot = state.robots[String(playerNum)];
+  if (!robot) return;
+
+  if (action === 'start') {
+    robot.tracking = true;
+    robot.trail = robot.rosPose ? [{ x: robot.rosPose.x, y: robot.rosPose.y }] : [];
+  } else if (action === 'stop') {
+    robot.tracking = false;
+  } else if (action === 'clear') {
+    robot.trail = [];
+  }
+
+  scheduleRender();
+}
+
 function scheduleRender() {
   if (renderPending) return;
   renderPending = true;
@@ -36,7 +53,7 @@ function scheduleRender() {
   requestAnimationFrame(() => {
     renderPending = false;
     drawField(state.robots);
-    renderRobots(state.robots, state.gcGoalkeeper);
+    renderRobots(state.robots, state.gcGoalkeeper, state.fieldMode, handleTrackAction);
     renderLegend(state.robots, state.gcGoalkeeper);
     scoreCharts.record(state.robots);
     scheduleRoleSwitchExpiry();

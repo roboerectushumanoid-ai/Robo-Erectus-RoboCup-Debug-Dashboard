@@ -1,6 +1,14 @@
-import { DEFAULT_ROBOTS } from './constants.js';
+import { DEFAULT_ROBOTS, TRAIL_MAX_POINTS, TRAIL_MIN_DIST_MM } from './constants.js';
 
 const rosConns = {};
+
+function appendTrailPoint(robot, pose) {
+  if (!robot.trail) robot.trail = [];
+  const last = robot.trail[robot.trail.length - 1];
+  if (last && Math.hypot(pose.x - last.x, pose.y - last.y) < TRAIL_MIN_DIST_MM) return;
+  robot.trail.push({ x: pose.x, y: pose.y });
+  if (robot.trail.length > TRAIL_MAX_POINTS) robot.trail.shift();
+}
 
 function toggleRos() {
   const panel = document.getElementById('ros-panel');
@@ -35,6 +43,15 @@ function rosSubscribe(ros, playerNum, state, scheduleRender) {
     if (!state.robots[key]) state.robots[key] = { playerNum };
     state.robots[key].decision = msg.data;
     state.robots[key].decisionTime = Date.now();
+    scheduleRender();
+  });
+
+  topic('/booster_soccer/robot_pose', 'geometry_msgs/msg/Pose2D', msg => {
+    if (!state.robots[key]) state.robots[key] = { playerNum };
+    const robot = state.robots[key];
+    robot.rosPose = { x: msg.x * 1000, y: msg.y * 1000, theta: msg.theta };
+    robot.rosPoseTime = Date.now();
+    if (robot.tracking) appendTrailPoint(robot, robot.rosPose);
     scheduleRender();
   });
 

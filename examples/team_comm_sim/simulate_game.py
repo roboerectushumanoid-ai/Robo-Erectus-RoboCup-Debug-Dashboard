@@ -67,7 +67,7 @@ def game_state(tick, role_switch_at):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Continuously broadcast fake 14-byte teammate packets.")
+    parser = argparse.ArgumentParser(description="Continuously broadcast fake 16-byte teammate packets.")
     parser.add_argument("--team-id", type=int, default=55)
     parser.add_argument("--address", default="255.255.255.255")
     parser.add_argument("--port", type=int, default=None)

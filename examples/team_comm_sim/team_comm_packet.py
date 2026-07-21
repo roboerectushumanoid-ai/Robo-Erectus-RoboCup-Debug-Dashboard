@@ -12,6 +12,10 @@ OP_REQUEST = 1
 OP_ACK = 2
 OP_CANCEL = 3
 
+# Must match field_length/field_width defaults in robot_communication_node.cpp.
+FIELD_LENGTH_M = 14.0
+FIELD_WIDTH_M = 9.0
+
 
 def clamp(value, low, high):
     return max(low, min(high, value))
@@ -23,6 +27,22 @@ def compact_score(value):
 
 def compact_confidence(value):
     return round(clamp(value, 0, 100) * 15 / 100)
+
+
+def ball_coord_to_byte(coord_m, extent_m):
+    normalized = (coord_m + extent_m * 0.5) / extent_m
+    return round(clamp(normalized, 0.0, 1.0) * 255)
+
+
+def zone_center_m(zone, field_length=FIELD_LENGTH_M, field_width=FIELD_WIDTH_M):
+    if zone < 1 or zone > 9:
+        return (0.0, 0.0)
+    idx = zone - 1
+    col = idx // 3
+    row_from_top = idx % 3
+    x = -field_length / 2 + field_length * (col + 0.5) / 3
+    y = field_width / 2 - field_width * (row_from_top + 0.5) / 3
+    return (x, y)
 
 
 def identity(player_id, role, ready=True, active=False):
@@ -60,6 +80,7 @@ def pack_team_comm(
     ready=True,
     lead=False,
     control=0,
+    ball_pos=None,
 ):
     if sender_id not in (1, 2, 3):
         raise ValueError(f"sender_id must be 1, 2, or 3, got {sender_id}")
@@ -82,6 +103,16 @@ def pack_team_comm(
     chase = [compact_score(v) for v in chase_scores]
     goalie = [compact_score(v) for v in goalie_scores]
 
+    # Precise ball x/y (bytes 14-15): only meaningful once final_ball_zone != 0.
+    # Default to that zone's center when the caller doesn't supply a precise
+    # position, so the quantized bytes stay consistent with the zone nibble.
+    if final_ball_zone == 0:
+        ball_x_byte, ball_y_byte = 0, 0
+    else:
+        ball_x_m, ball_y_m = ball_pos if ball_pos is not None else zone_center_m(final_ball_zone)
+        ball_x_byte = ball_coord_to_byte(ball_x_m, FIELD_LENGTH_M)
+        ball_y_byte = ball_coord_to_byte(ball_y_m, FIELD_WIDTH_M)
+
     return bytes([
         PASSWORD,
         identity(sender_id, sender_role, ready=ready, active=lead),
@@ -97,6 +128,8 @@ def pack_team_comm(
         goalie[1],
         goalie[2],
         control & 0xFF,
+        ball_x_byte,
+        ball_y_byte,
     ])
 
 

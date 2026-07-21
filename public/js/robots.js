@@ -26,7 +26,7 @@ function ballConfidenceIcon(conf) {
   </span>`;
 }
 
-export function renderRobots(robots, gcGoalkeeper) {
+export function renderRobots(robots, gcGoalkeeper, fieldMode, onTrackAction) {
   const panel = document.getElementById('robots-panel');
   const list = [1, 2, 3].map(playerNum => robots[String(playerNum)] ?? { playerNum, empty: true });
 
@@ -64,6 +64,15 @@ export function renderRobots(robots, gcGoalkeeper) {
     const poseStr = robot.pose
       ? `(${fmtN(robot.pose.x / 1000, 2)}, ${fmtN(robot.pose.y / 1000, 2)}) m  ${fmtN(robot.pose.theta * 180 / Math.PI, 1)}°`
       : '–';
+
+    const trackingHtml = fieldMode === 'pose'
+      ? `<span class="sl">Tracking</span>
+         <span class="sv">
+           <button class="track-btn" data-player="${robot.playerNum}" data-action="start" ${robot.tracking ? 'disabled' : ''}>Start</button>
+           <button class="track-btn" data-player="${robot.playerNum}" data-action="stop" ${!robot.tracking ? 'disabled' : ''}>Stop</button>
+           <button class="track-btn" data-player="${robot.playerNum}" data-action="clear" ${!robot.trail?.length ? 'disabled' : ''}>Clear</button>
+         </span>`
+      : '';
 
     let ballStr;
     if (robot.ballAge >= 0 && robot.ball) {
@@ -116,6 +125,7 @@ export function renderRobots(robots, gcGoalkeeper) {
       <span class="sl">Ball Zone</span>    <span class="sv ball-zone-val">${fmtN(robot.ballZone)} ${ballConfidenceIcon(conf)}</span>
       <span class="sl score-label">Chase Score</span><span class="sv tactical-score">${fmtN(robot.chaseScore)}</span>
       <span class="sl score-label">Goalie Score</span><span class="sv tactical-score">${fmtN(robot.goalieScore)}</span>
+      ${trackingHtml}
     </div>
     <div class="card-meter">
       <div class="meter-label">Confidence</div>
@@ -127,6 +137,12 @@ export function renderRobots(robots, gcGoalkeeper) {
   </div>
 </div>`;
   }).join('');
+
+  if (onTrackAction) {
+    panel.querySelectorAll('.track-btn').forEach(btn => {
+      btn.addEventListener('click', () => onTrackAction(parseInt(btn.dataset.player, 10), btn.dataset.action));
+    });
+  }
 }
 
 export function renderLegend(robots, gcGoalkeeper) {

@@ -44,7 +44,7 @@
     <code>ssh booster@192.168.0.169</code><br>
     <code>ros2 launch rosbridge_server rosbridge_websocket_launch.xml</code>
   </p>
-  <p class="ros-topics-note">Then click Connect below. Topic used: <code>/booster_soccer/player_decision</code></p>
+  <p class="ros-topics-note">Then click Connect below. Topics used: <code>/booster_soccer/player_decision</code>, <code>/booster_soccer/robot_pose</code></p>
   <div id="ros-rows"></div>
   <button class="ros-btn ros-add-btn" id="ros-add-btn">+ Add robot</button>
 </div>
@@ -53,6 +53,10 @@
 
   <!-- ── Left: field ─────────────────────────────── -->
   <div id="left-panel">
+    <div class="field-mode-toggle" id="field-mode-toggle" aria-label="Field display mode">
+      <button class="field-mode-btn active" data-mode="zone">Zone</button>
+      <button class="field-mode-btn" data-mode="pose">Actual Position</button>
+    </div>
     <div id="canvas-wrap">
       <canvas id="field"></canvas>
     </div>

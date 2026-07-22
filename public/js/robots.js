@@ -228,6 +228,8 @@ export function renderRobots(robots, gcGoalkeeper, fieldMode) {
     return;
   }
 
+  panel.querySelectorAll('.robots-empty').forEach(el => el.remove());
+
   [1, 2, 3].forEach(playerNum => {
     if (!cardCache.has(playerNum)) {
       const card = buildRobotCard(playerNum);
